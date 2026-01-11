@@ -28,6 +28,14 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
     return R * c;
 };
 
+// List of Overpass Mirrors to rotate through
+const OVERPASS_SERVERS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://lz4.overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+];
+
 const ResultsPanel: React.FC<ResultsPanelProps> = ({ 
     projects,
     totalCount,
@@ -49,6 +57,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
         school: []
     });
     const [isLoading, setIsLoading] = useState(false);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
     
     // Cache to prevent refetching same location
     const lastFetchRef = useRef<{lat: number, lng: number, radius: number} | null>(null);
@@ -65,165 +74,204 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
 
     // Fetch OSM Data (Loads ALL categories at once when location changes)
     useEffect(() => {
-        const fetchAllPlaces = async () => {
-            const { lat, lng, radius } = searchState;
+        let isMounted = true;
+        
+        // Debounce execution to avoid rate limits when sliding or typing quickly
+        const timeoutId = setTimeout(() => {
+            const fetchAllPlaces = async () => {
+                const { lat, lng, radius } = searchState;
 
-            // Check if we need to fetch (only if location/radius changed)
-            if (lastFetchRef.current && 
-                lastFetchRef.current.lat === lat && 
-                lastFetchRef.current.lng === lng && 
-                lastFetchRef.current.radius === radius) {
-                return;
-            }
+                // Check if we need to fetch (only if location/radius changed)
+                if (lastFetchRef.current && 
+                    lastFetchRef.current.lat === lat && 
+                    lastFetchRef.current.lng === lng && 
+                    lastFetchRef.current.radius === radius) {
+                    return;
+                }
 
-            setIsLoading(true);
-            setPlacesData({ mall: [], hospital: [], school: [] }); // Clear previous data
-            // Notify parent to clear map markers temporarily
-            if (onPlacesFetched) onPlacesFetched([]);
-
-            try {
-                const radiusMeters = radius * 1000;
+                setIsLoading(true);
+                setErrorMsg(null);
+                setPlacesData({ mall: [], hospital: [], school: [] }); // Clear previous data
                 
-                // Combined Query for Malls, Hospitals, and Schools
-                const query = `
-                    [out:json][timeout:90];
-                    (
-                      node["shop"~"mall|department_store",i](around:${radiusMeters},${lat},${lng});
-                      way["shop"~"mall|department_store",i](around:${radiusMeters},${lat},${lng});
-                      relation["shop"~"mall|department_store",i](around:${radiusMeters},${lat},${lng});
-                      
-                      node["amenity"="hospital"](around:${radiusMeters},${lat},${lng});
-                      way["amenity"="hospital"](around:${radiusMeters},${lat},${lng});
-                      relation["amenity"="hospital"](around:${radiusMeters},${lat},${lng});
-                      
-                      node["amenity"~"school|university|college",i](around:${radiusMeters},${lat},${lng});
-                      way["amenity"~"school|university|college",i](around:${radiusMeters},${lat},${lng});
-                      relation["amenity"~"school|university|college",i](around:${radiusMeters},${lat},${lng});
-                    );
-                    out body center;
-                `;
+                // Notify parent to clear map markers temporarily
+                if (onPlacesFetched) onPlacesFetched([]);
 
-                const response = await fetch('https://overpass-api.de/api/interpreter', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    },
-                    body: 'data=' + encodeURIComponent(query)
-                });
+                try {
+                    const radiusMeters = radius * 1000;
+                    
+                    // Combined Query for Malls, Hospitals, and Schools
+                    const query = `
+                        [out:json][timeout:25];
+                        (
+                          node["shop"~"mall|department_store",i](around:${radiusMeters},${lat},${lng});
+                          way["shop"~"mall|department_store",i](around:${radiusMeters},${lat},${lng});
+                          relation["shop"~"mall|department_store",i](around:${radiusMeters},${lat},${lng});
+                          
+                          node["amenity"="hospital"](around:${radiusMeters},${lat},${lng});
+                          way["amenity"="hospital"](around:${radiusMeters},${lat},${lng});
+                          relation["amenity"="hospital"](around:${radiusMeters},${lat},${lng});
+                          
+                          node["amenity"~"school|university|college",i](around:${radiusMeters},${lat},${lng});
+                          way["amenity"~"school|university|college",i](around:${radiusMeters},${lat},${lng});
+                          relation["amenity"~"school|university|college",i](around:${radiusMeters},${lat},${lng});
+                        );
+                        out body center;
+                    `;
 
-                if (!response.ok) throw new Error(`OSM Fetch Failed: ${response.statusText}`);
+                    let data = null;
+                    let success = false;
 
-                const data = await response.json();
-                
-                const newPlaces: Record<string, NearbyPlace[]> = {
-                    mall: [],
-                    hospital: [],
-                    school: []
-                };
+                    // Server Rotation Logic
+                    for (const server of OVERPASS_SERVERS) {
+                        if (!isMounted) break;
+                        try {
+                            const response = await fetch(server, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/x-www-form-urlencoded'
+                                },
+                                body: 'data=' + encodeURIComponent(query)
+                            });
 
-                const MALL_REGEX = /mall|department_store/i;
-                const HOSPITAL_REGEX = /hospital/i;
-                const SCHOOL_REGEX = /school|university|college/i;
-
-                const allPlacesFlat: NearbyPlace[] = [];
-                const seenIds = new Set<string>();
-
-                if (data && data.elements) {
-                    data.elements.forEach((el: any) => {
-                        // Prevent duplicates
-                        if (seenIds.has(String(el.id))) return;
-                        seenIds.add(String(el.id));
-
-                        const tags = el.tags || {};
-                        const name = tags.name || tags["name:en"] || tags["name:th"];
-                        // Skip unnamed places
-                        if (!name) return;
-
-                        const nameLower = name.toLowerCase();
-
-                        const pLat = el.lat || el.center?.lat;
-                        const pLng = el.lon || el.center?.lon;
-                        
-                        if(!pLat || !pLng) return;
-
-                        const dist = calculateDistance(lat, lng, pLat, pLng);
-
-                        // Determine Type
-                        let type: 'mall' | 'hospital' | 'school' | null = null;
-                        
-                        // Priority check
-                        if (tags.shop && MALL_REGEX.test(tags.shop)) type = 'mall';
-                        else if (tags.amenity && HOSPITAL_REGEX.test(tags.amenity)) type = 'hospital';
-                        else if (tags.amenity && SCHOOL_REGEX.test(tags.amenity)) type = 'school';
-
-                        if (!type) return;
-
-                        // --- RELAXED FILTERING LOGIC (Trust tags, exclude obvious bad ones) ---
-
-                        // 1. Malls: Exclude convenience stores AND Markets
-                        if (type === 'mall') {
-                            const excludeMalls = [
-                                '7-eleven', '7-11', 'family', 'lawson', 'mini big c', 
-                                'lotus\'s go fresh', 'cj', 'tops daily', 'seven eleven', 'jiffy',
-                                'market', 'ตลาด', 'bazaar', 'night market', 'walking street', 'floating market',
-                                'shop', 'store' // Generic names
-                            ];
-                            if (excludeMalls.some(ex => nameLower.includes(ex))) return;
+                            if (response.ok) {
+                                data = await response.json();
+                                success = true;
+                                break; // Success! Exit loop
+                            } else if (response.status === 429) {
+                                console.warn(`Rate limit (429) on ${server}, trying next mirror...`);
+                                continue;
+                            } else {
+                                console.warn(`Error ${response.status} on ${server}, trying next mirror...`);
+                                continue;
+                            }
+                        } catch (err) {
+                            console.warn(`Connection failed to ${server}`, err);
+                            continue;
                         }
+                    }
 
-                        // 2. Hospitals: Exclude Animal Hospitals and Clinics
-                        if (type === 'hospital') {
-                             const excludeHospital = ['animal', 'pet', 'dental', 'clinic', 'คลินิก', 'รักษาสัตว์', 'ทำฟัน', 'ทันตกรรม'];
-                             if (excludeHospital.some(ex => nameLower.includes(ex))) return;
-                        }
+                    if (!success || !data) {
+                        throw new Error("Unable to fetch data from all Overpass mirrors. Please try again later.");
+                    }
 
-                        // 3. Schools: Exclude specialized schools (Driving, Music, etc.)
-                        if (type === 'school') {
-                            const excludeSchools = [
-                                'driving', 'music', 'tutor', 'language', 'dance', 
-                                'nursery', 'day care', 'gym', 'swim', 'ballet', 'yoga', 'cooking', 'art', 'football', 'soccer', 'tennis', 'badminton', 'taekwondo', 'muay thai',
-                                'บริบาล', 'กวดวิชา', 'สอนขับรถ', 'ดนตรี', 'ภาษา', 'เต้น', 'ว่ายน้ำ', 'ยิม', 'รับเลี้ยงเด็ก', 'เนอสเซอรี่'
-                            ];
-                            if (excludeSchools.some(ex => nameLower.includes(ex))) return;
-                        }
+                    if (!isMounted) return;
 
-                        const placeObj: NearbyPlace = {
-                            id: String(el.id),
-                            name: name,
-                            type: type,
-                            distance: parseFloat(dist.toFixed(2)),
-                            rating: 3.5 + Math.random() * 1.5,
-                            address: tags["addr:street"] ? `${tags["addr:street"]} ${tags["addr:city"] || ''}` : "Location details unavailable",
-                            lat: pLat,
-                            lng: pLng
-                        };
+                    const newPlaces: Record<string, NearbyPlace[]> = {
+                        mall: [],
+                        hospital: [],
+                        school: []
+                    };
 
-                        newPlaces[type].push(placeObj);
-                        allPlacesFlat.push(placeObj);
+                    const MALL_REGEX = /mall|department_store/i;
+                    const HOSPITAL_REGEX = /hospital/i;
+                    const SCHOOL_REGEX = /school|university|college/i;
+
+                    const allPlacesFlat: NearbyPlace[] = [];
+                    const seenIds = new Set<string>();
+
+                    if (data && data.elements) {
+                        data.elements.forEach((el: any) => {
+                            // Prevent duplicates
+                            if (seenIds.has(String(el.id))) return;
+                            seenIds.add(String(el.id));
+
+                            const tags = el.tags || {};
+                            const name = tags.name || tags["name:en"] || tags["name:th"];
+                            // Skip unnamed places
+                            if (!name) return;
+
+                            const nameLower = name.toLowerCase();
+
+                            const pLat = el.lat || el.center?.lat;
+                            const pLng = el.lon || el.center?.lon;
+                            
+                            if(!pLat || !pLng) return;
+
+                            const dist = calculateDistance(lat, lng, pLat, pLng);
+
+                            // Determine Type
+                            let type: 'mall' | 'hospital' | 'school' | null = null;
+                            
+                            // Priority check
+                            if (tags.shop && MALL_REGEX.test(tags.shop)) type = 'mall';
+                            else if (tags.amenity && HOSPITAL_REGEX.test(tags.amenity)) type = 'hospital';
+                            else if (tags.amenity && SCHOOL_REGEX.test(tags.amenity)) type = 'school';
+
+                            if (!type) return;
+
+                            // --- RELAXED FILTERING LOGIC (Trust tags, exclude obvious bad ones) ---
+
+                            // 1. Malls: Exclude convenience stores AND Markets
+                            if (type === 'mall') {
+                                const excludeMalls = [
+                                    '7-eleven', '7-11', 'family', 'lawson', 'mini big c', 
+                                    'lotus\'s go fresh', 'cj', 'tops daily', 'seven eleven', 'jiffy',
+                                    'market', 'ตลาด', 'bazaar', 'night market', 'walking street', 'floating market',
+                                    'shop', 'store' // Generic names
+                                ];
+                                if (excludeMalls.some(ex => nameLower.includes(ex))) return;
+                            }
+
+                            // 2. Hospitals: Exclude Animal Hospitals and Clinics
+                            if (type === 'hospital') {
+                                 const excludeHospital = ['animal', 'pet', 'dental', 'clinic', 'คลินิก', 'รักษาสัตว์', 'ทำฟัน', 'ทันตกรรม'];
+                                 if (excludeHospital.some(ex => nameLower.includes(ex))) return;
+                            }
+
+                            // 3. Schools: Exclude specialized schools (Driving, Music, etc.)
+                            if (type === 'school') {
+                                const excludeSchools = [
+                                    'driving', 'music', 'tutor', 'language', 'dance', 
+                                    'nursery', 'day care', 'gym', 'swim', 'ballet', 'yoga', 'cooking', 'art', 'football', 'soccer', 'tennis', 'badminton', 'taekwondo', 'muay thai',
+                                    'บริบาล', 'กวดวิชา', 'สอนขับรถ', 'ดนตรี', 'ภาษา', 'เต้น', 'ว่ายน้ำ', 'ยิม', 'รับเลี้ยงเด็ก', 'เนอสเซอรี่'
+                                ];
+                                if (excludeSchools.some(ex => nameLower.includes(ex))) return;
+                            }
+
+                            const placeObj: NearbyPlace = {
+                                id: String(el.id),
+                                name: name,
+                                type: type,
+                                distance: parseFloat(dist.toFixed(2)),
+                                rating: 3.5 + Math.random() * 1.5,
+                                address: tags["addr:street"] ? `${tags["addr:street"]} ${tags["addr:city"] || ''}` : "Location details unavailable",
+                                lat: pLat,
+                                lng: pLng
+                            };
+
+                            newPlaces[type].push(placeObj);
+                            allPlacesFlat.push(placeObj);
+                        });
+                    }
+
+                    // Sort each category by distance
+                    Object.keys(newPlaces).forEach(key => {
+                        newPlaces[key].sort((a, b) => a.distance - b.distance);
                     });
+
+                    setPlacesData(newPlaces);
+                    lastFetchRef.current = { lat, lng, radius };
+                    
+                    // Lift state up to App component for the Map
+                    if (onPlacesFetched) {
+                        onPlacesFetched(allPlacesFlat);
+                    }
+
+                } catch (error) {
+                    console.error("Error fetching OSM data:", error);
+                    setErrorMsg("Failed to load nearby places. High traffic.");
+                } finally {
+                    if(isMounted) setIsLoading(false);
                 }
+            };
+            
+            fetchAllPlaces();
+        }, 1000); // 1 second debounce to prevent spamming while moving map
 
-                // Sort each category by distance
-                Object.keys(newPlaces).forEach(key => {
-                    newPlaces[key].sort((a, b) => a.distance - b.distance);
-                });
-
-                setPlacesData(newPlaces);
-                lastFetchRef.current = { lat, lng, radius };
-                
-                // Lift state up to App component for the Map
-                if (onPlacesFetched) {
-                    onPlacesFetched(allPlacesFlat);
-                }
-
-            } catch (error) {
-                console.error("Error fetching OSM data:", error);
-            } finally {
-                setIsLoading(false);
-            }
+        return () => {
+            isMounted = false;
+            clearTimeout(timeoutId);
         };
-
-        fetchAllPlaces();
     }, [searchState.lat, searchState.lng, searchState.radius]);
 
     // Sorting Logic for Nearby Places
@@ -455,8 +503,19 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                      </div>
                  )}
 
+                 {/* ERROR STATE */}
+                 {activeTab !== 'projects' && errorMsg && placesData[activeTab].length === 0 && (
+                     <div className="flex flex-col items-center justify-center py-10 px-6 text-center animate-fadeInUp">
+                         <div className="bg-red-50 p-3 rounded-full mb-3">
+                            <AlertCircle className="w-6 h-6 text-red-500" />
+                         </div>
+                         <span className="text-sm text-gray-700 font-bold">Data Unavailable</span>
+                         <span className="text-xs text-gray-500 mt-1 max-w-[200px]">{errorMsg}</span>
+                     </div>
+                 )}
+
                  {/* OTHER TABS (Mall, Hospital, School) */}
-                 {activeTab !== 'projects' && (!isLoading || placesData[activeTab].length > 0) && (
+                 {activeTab !== 'projects' && (!isLoading || placesData[activeTab].length > 0) && !errorMsg && (
                      <div className="space-y-3 animate-fadeInUp">
                          {/* Disclaimer Note */}
                          <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 flex items-center gap-2 mb-2">
