@@ -280,9 +280,9 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
             : `${(val / 1000000).toFixed(2)} MB`;
     };
 
-    // Helper for Pie Chart Slices - Updated to Primary Color Shades (SCBX Purple)
-    // Palette: Dark Purple -> Primary -> Light Purple -> Pale
-    const pieColors = ['#26003A', '#4E2A84', '#6F2C91', '#8E44AD', '#A569BD', '#BB8FCE', '#E8DAEF', '#F4ECF7'];
+    // Helper for Pie Chart Slices - Updated to Primary Color Shades (KBANK Green)
+    // Palette: Variations of green for KBANK CI
+    const pieColors = ['#004D25', '#007A33', '#00A950', '#42B97E', '#7ACC9F', '#B3E0C1', '#D4EDDB', '#E6F4EA'];
     
     let cumulativePercent = 0;
     const pieSlices = stats.pieChartData.map((d, i) => {
@@ -319,7 +319,7 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
                     </button>
                     <button 
                         onClick={onDownload}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-scbx hover:bg-scbxHover text-white text-sm font-bold shadow-lg shadow-purple-100 transition-transform active:scale-95"
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-scbx hover:bg-scbxHover text-white text-sm font-bold shadow-lg shadow-green-100 transition-transform active:scale-95"
                     >
                         <Download className="w-4 h-4" /> Download Image
                     </button>
@@ -365,8 +365,8 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
                                 </div>
                                 <div className="text-3xl font-bold text-gray-900">{stats.avgSold.toFixed(1)}%</div>
                             </div>
-                            <div className="p-5 rounded-2xl bg-purple-50/50 border border-purple-100">
-                                <div className="flex items-center gap-2 text-purple-600 mb-2">
+                            <div className="p-5 rounded-2xl bg-green-50/50 border border-green-100/50">
+                                <div className="flex items-center gap-2 text-scbx mb-2">
                                     <TrendingUp className="w-4 h-4" />
                                     <span className="text-xs font-bold uppercase">Avg. Sale Speed</span>
                                 </div>
@@ -457,7 +457,7 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
                                      {stats.priceSegments.map((seg, i) => {
                                          const count = stats.priceCounts[i];
                                          const heightPercent = stats.maxPriceCount > 0 ? (count / stats.maxPriceCount) * 100 : 0;
-                                         // Dynamic color: Primary Color (SCBX Purple)
+                                         // Dynamic color: Primary Color (KBANK Green)
                                          const barColorClass = count > 0 ? 'bg-scbx group-hover:bg-scbxHover' : 'bg-gray-100';
                                          
                                          return (

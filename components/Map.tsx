@@ -129,6 +129,30 @@ const MapRegister: React.FC<{ setMap: (map: L.Map) => void }> = ({ setMap }) => 
     return null;
 };
 
+// Component to fix rendering issues by invalidating size on resize
+const MapResizer: React.FC = () => {
+    const map = useMap();
+    
+    useEffect(() => {
+        // 1. Force invalidate immediately on mount
+        map.invalidateSize();
+
+        // 2. Use ResizeObserver to detect container size changes
+        const resizeObserver = new ResizeObserver(() => {
+            map.invalidateSize();
+        });
+
+        const container = map.getContainer();
+        resizeObserver.observe(container);
+
+        return () => {
+            resizeObserver.disconnect();
+        };
+    }, [map]);
+
+    return null;
+};
+
 const ProjectFlyTo: React.FC<{ project: Project | null; place: NearbyPlace | null | undefined }> = ({ project, place }) => {
     const map = useMap();
     useEffect(() => {
@@ -150,8 +174,8 @@ const ProjectFlyTo: React.FC<{ project: Project | null; place: NearbyPlace | nul
 const createUserIcon = () => {
     const html = `
         <div class="relative flex items-center justify-center w-8 h-8 -ml-4 -mt-4">
-            <div class="absolute w-full h-full bg-[#4E2A84] rounded-full opacity-30 animate-ping"></div>
-            <div class="relative w-full h-full bg-[#4E2A84] rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white">
+            <div class="absolute w-full h-full bg-[#00A950] rounded-full opacity-30 animate-ping"></div>
+            <div class="relative w-full h-full bg-[#00A950] rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
             </div>
         </div>`;
@@ -298,6 +322,7 @@ const MapComponent: React.FC<MapProps> = ({
                 
                 <MapUpdater center={center} zoom={searchMode === 'code' ? 12 : 14} />
                 <MapRegister setMap={setMapInstance} />
+                <MapResizer />
                 <ProjectFlyTo project={activeProject} place={activePlace} />
 
                 {searchMode === 'location' && (
