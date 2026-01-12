@@ -1,5 +1,3 @@
-
-
 export interface SubUnit {
   type: string;
   usableArea: string;
@@ -52,6 +50,8 @@ export interface SearchState {
   sortBy: 'distance' | 'percentSold' | 'speed6m' | 'speed' | 'priceAsc' | 'priceDesc' | 'unitLeft' | 'launchDate';
   minPrice: number | null;
   maxPrice: number | null;
+  minLaunchDate: string | null; // Format "YY.MM" (e.g. "60.01")
+  maxSoldPercent: number; // New filter for sold % threshold
 }
 
 export interface AIAnalysisResult {

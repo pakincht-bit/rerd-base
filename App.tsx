@@ -49,7 +49,9 @@ const App: React.FC = () => {
         typeFilter: [],
         sortBy: 'distance',
         minPrice: null,
-        maxPrice: null
+        maxPrice: null,
+        minLaunchDate: null,
+        maxSoldPercent: 100
     });
 
     const [unifiedSearchInput, setUnifiedSearchInput] = useState('13.7563, 100.5018');
@@ -92,8 +94,28 @@ const App: React.FC = () => {
             });
         }
 
+        // Filter by Launch Date
+        if (searchState.minLaunchDate) {
+            const minVal = parseFloat(searchState.minLaunchDate);
+            if (!isNaN(minVal)) {
+                data = data.filter(p => {
+                    const validDates = p.subUnits
+                        .map(u => parseFloat(u.launchDate))
+                        .filter(d => !isNaN(d));
+                    
+                    if (validDates.length === 0) return false;
+                    return validDates.some(d => d >= minVal);
+                });
+            }
+        }
+
+        // Filter by Sold %
+        if (searchState.maxSoldPercent < 100) {
+            data = data.filter(p => parseFloat(p.percentSold) <= searchState.maxSoldPercent);
+        }
+
         return data;
-    }, [projects, searchState.lat, searchState.lng, searchState.radius, searchState.typeFilter, searchState.minPrice, searchState.maxPrice, searchState.searchMode]);
+    }, [projects, searchState.lat, searchState.lng, searchState.radius, searchState.typeFilter, searchState.minPrice, searchState.maxPrice, searchState.minLaunchDate, searchState.maxSoldPercent, searchState.searchMode]);
 
     // 2. Final Filtered Projects (Code Filter + Sort)
     const filteredProjects = useMemo(() => {
@@ -180,7 +202,6 @@ const App: React.FC = () => {
             if (!isNaN(lat) && !isNaN(lng)) {
                 setSearchState(prev => ({ ...prev, lat, lng }));
                 setSelectedProject(null);
-                // Also reset active place when moving location
                 setActivePlace(null);
                 return;
             }
@@ -194,19 +215,21 @@ const App: React.FC = () => {
             codeFilter: [],
             typeFilter: [],
             minPrice: null,
-            maxPrice: null
+            maxPrice: null,
+            minLaunchDate: null,
+            maxSoldPercent: 100
         }));
     };
 
     const handleProjectSelect = (project: Project) => {
         setActiveProject(project);
         setSelectedProject(project);
-        setActivePlace(null); // Clear place selection if a project is selected
+        setActivePlace(null); 
     };
 
     const handlePlaceSelect = (place: NearbyPlace) => {
         setActivePlace(place);
-        setSelectedProject(null); // Clear project selection if a place is selected
+        setSelectedProject(null); 
         setActiveProject(null);
     };
 
@@ -228,7 +251,6 @@ const App: React.FC = () => {
         }
     };
 
-    // --- Dynamic Layout Logic ---
     const sidebarWidth = isSidebarExpanded ? 'min(calc(100% - 32px), 420px)' : '80px';
     const resultsPanelLeft = isSidebarExpanded ? 'md:left-[450px] left-4' : 'md:left-[110px] left-4';
     const detailsPanelClass = useMemo(() => {
@@ -251,7 +273,6 @@ const App: React.FC = () => {
                 />
             </div>
 
-            {/* Header / Top Bar */}
             <header 
                 className="fixed top-4 left-4 h-18 bg-white/75 backdrop-blur-2xl border border-white/50 shadow-xl rounded-2xl z-50 flex items-center justify-between px-6 transition-all duration-300"
                 style={{ width: 'min(calc(100% - 32px), 420px)' }}
@@ -279,7 +300,6 @@ const App: React.FC = () => {
                 </div>
             </header>
 
-             {/* Right Top Actions */}
             <div className="fixed top-4 right-4 z-50 flex items-center gap-3">
                  <button onClick={() => setShowExportModal(true)} className="flex items-center gap-2 h-14 px-5 bg-white/75 backdrop-blur-2xl border border-white/50 shadow-xl rounded-2xl text-gray-700 font-bold hover:bg-white transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer">
                     <Download className="w-5 h-5 text-scbx" />
@@ -308,7 +328,6 @@ const App: React.FC = () => {
                         className={detailsPanelClass}
                     />
                     
-                    {/* LEFT PANEL: Sidebar (Filters & Search) */}
                     <div 
                         className="absolute top-24 left-4 bottom-4 z-20 transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)]"
                         style={{ width: sidebarWidth }}
@@ -329,7 +348,6 @@ const App: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* RESULTS PANEL: Positions dynamically next to sidebar */}
                     <div 
                         className={`
                             absolute top-24 bottom-4 z-10

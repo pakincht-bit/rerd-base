@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Project, SearchState } from '../types';
-import { MapPin, Hash, Search, X, ChevronDown, ChevronUp, RotateCcw, PanelLeftClose, PanelLeftOpen, Home, Check } from 'lucide-react';
+import { MapPin, Hash, Search, X, ChevronDown, ChevronUp, RotateCcw, PanelLeftClose, PanelLeftOpen, Home, Check, Calendar, Percent } from 'lucide-react';
 
 interface SidebarProps {
     searchState: SearchState;
@@ -27,23 +27,32 @@ const Sidebar: React.FC<SidebarProps> = ({
     isCollapsed,
     onToggle
 }) => {
-    // Removed isCodeExpanded state
     const [isAreaDropdownOpen, setIsAreaDropdownOpen] = useState(false);
     const [areaSearchQuery, setAreaSearchQuery] = useState("");
 
-    // Calculate unique codes (For Dropdown - shows ALL available codes)
     const uniqueCodes = useMemo(() => {
         return Array.from(new Set(allProjects.map(p => p.code).filter(Boolean))).sort();
     }, [allProjects]);
 
-    // Filter unique codes based on search query
     const filteredUniqueCodes = useMemo(() => {
         if (!areaSearchQuery) return uniqueCodes;
         const lowerQuery = areaSearchQuery.toLowerCase();
         return uniqueCodes.filter(code => code.toLowerCase().includes(lowerQuery));
     }, [uniqueCodes, areaSearchQuery]);
 
-    // Helper to calculate distance
+    const availableYears = useMemo(() => {
+        const years = new Set<string>();
+        allProjects.forEach(p => {
+            p.subUnits.forEach(u => {
+                if (u.launchDate && u.launchDate !== '-') {
+                    const [year] = u.launchDate.split('.');
+                    if (year) years.add(year);
+                }
+            });
+        });
+        return Array.from(years).sort((a, b) => parseInt(b) - parseInt(a));
+    }, [allProjects]);
+
     const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
         const R = 6371;
         const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -54,7 +63,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     };
 
-    // Filter codes based on View (For Filter Buttons)
     const visibleCodes = useMemo(() => {
         if (searchState.searchMode === 'code') {
             return uniqueCodes;
@@ -71,7 +79,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         return Array.from(codes).sort();
     }, [allProjects, searchState.lat, searchState.lng, searchState.radius, searchState.searchMode, uniqueCodes]);
 
-    // Group visible codes by first letter
     const groupedCodes = useMemo((): Record<string, string[]> => {
         const groups: Record<string, string[]> = {};
         visibleCodes.forEach(code => {
@@ -87,7 +94,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         if (mode === 'code') {
             newCodeFilter = searchState.codeFilter;
-            // Auto-select first code if switching to code mode and none selected
             if (newCodeFilter.length === 0 && uniqueCodes.length > 0) {
                 newCodeFilter = [uniqueCodes[0]];
             }
@@ -116,7 +122,18 @@ const Sidebar: React.FC<SidebarProps> = ({
         setSearchState(prev => ({ ...prev, radius: r }));
     };
 
-    // --- Collapsed View (Mini Sidebar) ---
+    const handleLaunchDateChange = (year: string, month: string) => {
+        if (!year) {
+            setSearchState(prev => ({ ...prev, minLaunchDate: null }));
+            return;
+        }
+        const m = month || '01';
+        setSearchState(prev => ({ ...prev, minLaunchDate: `${year}.${m}` }));
+    };
+
+    const currentLaunchYear = searchState.minLaunchDate ? searchState.minLaunchDate.split('.')[0] : '';
+    const currentLaunchMonth = searchState.minLaunchDate ? searchState.minLaunchDate.split('.')[1] : '';
+
     if (isCollapsed) {
         return (
             <aside className="w-full h-full flex flex-col items-center py-4 bg-transparent">
@@ -129,7 +146,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </button>
 
                 <div className="flex flex-col gap-5 w-full items-center overflow-y-auto custom-scrollbar no-scrollbar flex-1">
-                    {/* Mode & Radius - Updated to Primary Color */}
                     <div className="flex flex-col items-center gap-1.5 group cursor-default">
                         <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm border transition-all ${searchState.searchMode === 'location' ? 'bg-scbx text-white border-scbx' : 'bg-white text-gray-500 border-gray-200'}`}>
                             {searchState.searchMode === 'location' ? <MapPin className="w-5 h-5" /> : <Hash className="w-5 h-5" />}
@@ -139,7 +155,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 {searchState.radius}km
                             </span>
                         )}
-                        {/* Show selected Code in Code Mode */}
                         {searchState.searchMode === 'code' && searchState.codeFilter.length > 0 && (
                             <span className="text-[10px] font-bold text-gray-600 bg-white/50 px-2 py-0.5 rounded-full border border-gray-200 backdrop-blur-sm">
                                 {searchState.codeFilter.length > 1 ? `${searchState.codeFilter.length}` : searchState.codeFilter[0]}
@@ -149,7 +164,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 
                     <div className="w-8 h-px bg-gray-200/50"></div>
 
-                    {/* Active Types - Remains Black */}
                     <div className="flex flex-col items-center gap-1.5 relative group">
                         <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm border transition-all ${searchState.typeFilter.length > 0 ? 'bg-black text-white border-black' : 'bg-white text-gray-300 border-gray-200'}`}>
                             <Home className="w-5 h-5" />
@@ -162,7 +176,24 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <span className="text-[9px] font-bold text-gray-400">Type</span>
                     </div>
 
-                    {/* Active Codes - Only show in Location Mode */}
+                    {searchState.minLaunchDate && (
+                         <div className="flex flex-col items-center gap-1.5 relative group">
+                            <div className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm border bg-black text-white border-black">
+                                <Calendar className="w-5 h-5" />
+                            </div>
+                            <span className="text-[9px] font-bold text-gray-400">Since {searchState.minLaunchDate}</span>
+                        </div>
+                    )}
+
+                    {searchState.maxSoldPercent < 100 && (
+                        <div className="flex flex-col items-center gap-1.5 relative group">
+                            <div className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm border bg-black text-white border-black">
+                                <Percent className="w-5 h-5" />
+                            </div>
+                            <span className="text-[9px] font-bold text-gray-400">≤{searchState.maxSoldPercent}%</span>
+                        </div>
+                    )}
+
                     {searchState.searchMode === 'location' && (
                         <div className="flex flex-col items-center gap-1.5 relative group">
                             <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm border transition-all ${searchState.codeFilter.length > 0 ? 'bg-black text-white border-black' : 'bg-white text-gray-300 border-gray-200'}`}>
@@ -189,10 +220,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         );
     }
 
-    // --- Expanded View ---
     return (
         <aside className="w-full h-full flex flex-col bg-transparent">
-            {/* Header (Includes Search Controls) */}
             <div className="px-6 py-4 border-b border-gray-100/50 bg-white/40 backdrop-blur-sm sticky top-0 z-10 flex flex-col gap-3">
                 <div className="flex items-center justify-between w-full">
                     <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -207,10 +236,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </button>
                 </div>
 
-                {/* Search & Mode Controls */}
                 <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-1.5">
                     <div className="flex items-center gap-2">
-                         {/* Toggle - Updated to Primary (SCBX) Color */}
                          <div className="flex bg-gray-100 p-1 rounded-xl shrink-0">
                             <button 
                                 onClick={() => handleModeSwitch('location')}
@@ -226,10 +253,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                             </button>
                         </div>
 
-                        {/* Divider */}
                         <div className="w-px h-7 bg-gray-100"></div>
 
-                        {/* Input */}
                         <div className="flex-1 min-w-0 flex items-center gap-1">
                              {searchState.searchMode === 'location' ? (
                                 <>
@@ -244,7 +269,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     {unifiedSearchInput && (
                                         <button onClick={() => setUnifiedSearchInput('')} className="p-1 text-gray-400 hover:bg-gray-100 rounded-full"><X className="w-3.5 h-3.5" /></button>
                                     )}
-                                    {/* Search Button - Updated to Primary (SCBX) Color */}
                                     <button onClick={handleSearchAction} className="w-8 h-8 bg-scbx text-white rounded-lg flex items-center justify-center shadow-sm hover:bg-scbxHover transition-colors"><Search className="w-3.5 h-3.5" /></button>
                                 </>
                              ) : (
@@ -270,8 +294,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                                         <>
                                             <div className="fixed inset-0 z-30" onClick={() => setIsAreaDropdownOpen(false)}></div>
                                             <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-xl z-40 max-h-[300px] overflow-y-auto custom-scrollbar p-2 animate-in fade-in zoom-in-95 duration-200 flex flex-col">
-                                                
-                                                {/* Search Input inside Dropdown */}
                                                 <div className="sticky top-0 bg-white z-10 pb-2 px-1 border-b border-gray-50 mb-1">
                                                      <div className="relative">
                                                         <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -332,7 +354,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                 </div>
 
-                {/* Radius Buttons - Moved Here */}
                 {searchState.searchMode === 'location' && (
                     <div className="flex items-center gap-2 pt-1 animate-fadeInUp">
                         {[1, 3, 5, 10].map(r => (
@@ -354,7 +375,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
                 
-                {/* 1. Property Type Section - Remains Black */}
                 <section className="animate-fadeInUp">
                     <div className="flex justify-between items-center mb-3">
                         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Property Type</h3>
@@ -382,7 +402,77 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                 </section>
 
-                {/* 2. Code Area Tags - Remains Black */}
+                <section className="animate-fadeInUp delay-100">
+                    <div className="flex justify-between items-center mb-3">
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Launch Date (Since)</h3>
+                         {searchState.minLaunchDate && (
+                            <button onClick={() => setSearchState(prev => ({...prev, minLaunchDate: null}))} className="text-[10px] text-gray-500 underline hover:text-black">Clear</button>
+                        )}
+                    </div>
+                    <div className="flex gap-2">
+                        <div className="relative flex-1">
+                            <select
+                                value={currentLaunchYear}
+                                onChange={(e) => handleLaunchDateChange(e.target.value, currentLaunchMonth)}
+                                className={`w-full appearance-none pl-3 pr-8 py-2 border rounded-lg text-xs font-bold bg-white focus:outline-none focus:ring-1 focus:ring-black cursor-pointer transition-all ${
+                                    currentLaunchYear ? 'border-black text-black' : 'border-gray-200 text-gray-500'
+                                }`}
+                            >
+                                <option value="">Year...</option>
+                                {availableYears.map(year => (
+                                    <option key={year} value={year}>{year}</option>
+                                ))}
+                            </select>
+                            <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        </div>
+
+                        <div className="relative w-20">
+                            <select
+                                value={currentLaunchMonth}
+                                onChange={(e) => handleLaunchDateChange(currentLaunchYear, e.target.value)}
+                                disabled={!currentLaunchYear}
+                                className={`w-full appearance-none pl-3 pr-6 py-2 border rounded-lg text-xs font-bold bg-white focus:outline-none focus:ring-1 focus:ring-black cursor-pointer transition-all ${
+                                    !currentLaunchYear ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed' :
+                                    currentLaunchMonth ? 'border-black text-black' : 'border-gray-200 text-gray-500'
+                                }`}
+                            >
+                                {Array.from({ length: 12 }, (_, i) => {
+                                    const m = (i + 1).toString().padStart(2, '0');
+                                    return <option key={m} value={m}>{m}</option>
+                                })}
+                            </select>
+                            <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        </div>
+                    </div>
+                </section>
+
+                {/* Sold % Slider Filter */}
+                <section className="animate-fadeInUp delay-150">
+                    <div className="flex justify-between items-center mb-3">
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Sold % Threshold</h3>
+                        <span className="text-xs font-bold text-scbx">≤ {searchState.maxSoldPercent}%</span>
+                    </div>
+                    <div className="px-1">
+                        <input 
+                            type="range" 
+                            min="0" 
+                            max="100" 
+                            step="1"
+                            value={searchState.maxSoldPercent}
+                            onChange={(e) => setSearchState(prev => ({ ...prev, maxSoldPercent: parseInt(e.target.value) }))}
+                            className="w-full h-1.5 custom-range cursor-pointer"
+                            style={{
+                                background: `linear-gradient(to right, #000 0%, #000 ${searchState.maxSoldPercent}%, #e5e7eb ${searchState.maxSoldPercent}%, #e5e7eb 100%)`
+                            }}
+                        />
+                        <div className="flex justify-between mt-1 text-[10px] text-gray-400 font-medium">
+                            <span>0%</span>
+                            <span>50%</span>
+                            <span>100%</span>
+                        </div>
+                    </div>
+                </section>
+
                 {searchState.searchMode === 'location' && (
                     <section>
                          <div className="flex justify-between items-center mb-3">
@@ -392,7 +482,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                             )}
                         </div>
                         
-                        {/* Remove max-height constraint to show all codes */}
                         <div>
                             <div className="flex flex-col gap-3">
                                 {visibleCodes.length === 0 && (

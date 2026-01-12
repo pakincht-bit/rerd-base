@@ -100,6 +100,47 @@
       .leaflet-tooltip-right:before {
         border-right-color: rgba(255, 255, 255, 0.95) !important;
       }
+
+      /* Custom Range Slider */
+      .custom-range {
+        -webkit-appearance: none;
+        appearance: none;
+        background: transparent;
+        cursor: pointer;
+        outline: none;
+        border-radius: 99px;
+      }
+      .custom-range::-webkit-slider-runnable-track {
+        height: 6px;
+        border-radius: 99px;
+      }
+      .custom-range::-moz-range-track {
+        height: 6px;
+        border-radius: 99px;
+      }
+      .custom-range::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        margin-top: -6px; /* Centers thumb on the 6px track */
+        background-color: #000;
+        height: 18px;
+        width: 18px;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+        transition: transform 0.1s ease;
+      }
+      .custom-range::-webkit-slider-thumb:active {
+        transform: scale(1.15);
+      }
+      .custom-range::-moz-range-thumb {
+        background-color: #000;
+        height: 18px;
+        width: 18px;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+      }
     </style>
   <script type="importmap">
 {
