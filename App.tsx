@@ -1,17 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Map, FileText, UploadCloud, Download, Sparkles, X, FileSpreadsheet, Loader, Search, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen, RefreshCw, MapPin, RotateCcw } from 'lucide-react';
+import { Map as MapIcon, FileText, UploadCloud, Download, Sparkles, X, FileSpreadsheet, Loader, Search, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen, RefreshCw, MapPin, RotateCcw, Upload } from 'lucide-react';
 import { Project, SearchState, AIAnalysisResult, NearbyPlace } from './types';
 import Sidebar from './components/Sidebar';
 import MapComponent from './components/Map';
 import ProjectDetailPanel from './components/ProjectDetailPanel';
-import ResultsPanel from './components/FilterModal'; // Renamed import for clarity context, though file remains FilterModal
+import ResultsPanel from './components/FilterModal'; 
 import ExportDashboard from './components/ExportDashboard';
 import { parseCSV } from './services/csvService';
 import { generateMarketAnalysis } from './services/geminiService';
-import { HiddenAIReportTemplate } from './components/HiddenExportTemplates';
 import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
-import L from 'leaflet';
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
     const R = 6371;
@@ -29,14 +26,12 @@ const App: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [loadingText, setLoadingText] = useState('');
     
-    // Toggle States (Renamed for clarity)
-    const [isSidebarExpanded, setIsSidebarExpanded] = useState(true); // Left Panel (Filters)
+    const [isSidebarExpanded, setIsSidebarExpanded] = useState(true); 
 
     const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
     const [activeProject, setActiveProject] = useState<Project | null>(null);
     const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
-    // State for nearby places (Malls, Hospitals, Schools)
     const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlace[]>([]);
     const [activePlace, setActivePlace] = useState<NearbyPlace | null>(null);
 
@@ -58,30 +53,21 @@ const App: React.FC = () => {
 
     const [showUploadModal, setShowUploadModal] = useState(true);
     const [showExportModal, setShowExportModal] = useState(false);
-    const [aiResult, setAiResult] = useState<AIAnalysisResult | null>(null);
 
-    // 1. Projects In View (Filter Logic based on Search Mode)
     const projectsInView = useMemo(() => {
         let data = projects.map(p => ({
             ...p,
             distance: calculateDistance(searchState.lat, searchState.lng, p.lat, p.lng)
         }));
 
-        // Filter Logic branching based on Search Mode
         if (searchState.searchMode === 'location') {
-            // Location Mode: Strict Radius Filter
             data = data.filter(p => (p.distance || 0) <= searchState.radius);
-        } else {
-            // Code Mode: Ignore Radius, show all projects initially (will be filtered by codeFilter in next step)
-            // No operation needed here, data includes all projects
         }
 
-        // Filter by Type
         if (searchState.typeFilter.length > 0) {
             data = data.filter(p => p.subUnits.some(u => searchState.typeFilter.includes(u.type)));
         }
 
-        // Filter by Price
         if (searchState.minPrice !== null || searchState.maxPrice !== null) {
             data = data.filter(p => {
                 const validPrices = p.subUnits.map(u => u.price).filter(price => price > 0);
@@ -94,7 +80,6 @@ const App: React.FC = () => {
             });
         }
 
-        // Filter by Launch Date
         if (searchState.minLaunchDate) {
             const minVal = parseFloat(searchState.minLaunchDate);
             if (!isNaN(minVal)) {
@@ -109,7 +94,6 @@ const App: React.FC = () => {
             }
         }
 
-        // Filter by Sold %
         if (searchState.maxSoldPercent < 100) {
             data = data.filter(p => parseFloat(p.percentSold) <= searchState.maxSoldPercent);
         }
@@ -117,14 +101,11 @@ const App: React.FC = () => {
         return data;
     }, [projects, searchState.lat, searchState.lng, searchState.radius, searchState.typeFilter, searchState.minPrice, searchState.maxPrice, searchState.minLaunchDate, searchState.maxSoldPercent, searchState.searchMode]);
 
-    // 2. Final Filtered Projects (Code Filter + Sort)
     const filteredProjects = useMemo(() => {
         let data = [...projectsInView];
-
         if (searchState.codeFilter.length > 0) {
             data = data.filter(p => searchState.codeFilter.includes(p.code));
         }
-
         return data.sort((a, b) => {
             if (searchState.sortBy === 'percentSold') return parseFloat(b.percentSold) - parseFloat(a.percentSold);
             if (searchState.sortBy === 'speed6m') return parseFloat(b.saleSpeed6m) - parseFloat(a.saleSpeed6m);
@@ -132,13 +113,12 @@ const App: React.FC = () => {
             if (searchState.sortBy === 'unitLeft') {
                 const leftA = a.totalUnits - a.soldUnits;
                 const leftB = b.totalUnits - b.soldUnits;
-                return leftB - leftA; // Descending: Most units left first
+                return leftB - leftA;
             }
             if (searchState.sortBy === 'launchDate') {
                 const getLaunch = (p: Project) => {
-                     const dates = p.subUnits.map(u => u.launchDate).filter(d => d && d !== '-');
-                     if (dates.length === 0) return '';
-                     return dates.sort()[0]; 
+                     const dates = p.subUnits.map(u => u.launchDate).filter(d => d && d !== '-').sort();
+                     return dates.length > 0 ? dates[0] : '';
                 };
                 const dateA = getLaunch(a);
                 const dateB = getLaunch(b);
@@ -191,10 +171,8 @@ const App: React.FC = () => {
 
     const handleSearchAction = () => {
         if (searchState.searchMode !== 'location') return;
-
         const query = unifiedSearchInput.trim();
         if (!query) return;
-
         const parts = query.split(',');
         if (parts.length === 2) {
             const lat = parseFloat(parts[0].trim());
@@ -203,7 +181,6 @@ const App: React.FC = () => {
                 setSearchState(prev => ({ ...prev, lat, lng }));
                 setSelectedProject(null);
                 setActivePlace(null);
-                return;
             }
         }
     };
@@ -259,6 +236,7 @@ const App: React.FC = () => {
 
     return (
         <div className="flex flex-col h-screen text-[#222] overflow-hidden bg-gray-50 relative">
+            {/* Background Map */}
             <div className="absolute inset-0 z-0">
                  <MapComponent 
                     center={[searchState.lat, searchState.lng]}
@@ -273,115 +251,102 @@ const App: React.FC = () => {
                 />
             </div>
 
-            <header 
-                className="fixed top-4 left-4 h-18 bg-white/75 backdrop-blur-2xl border border-white/50 shadow-xl rounded-2xl z-50 flex items-center justify-between px-6 transition-all duration-300"
-                style={{ width: 'min(calc(100% - 32px), 420px)' }}
-            >
-                <div className="flex items-center gap-2 text-scbx font-bold text-2xl select-none">
-                    <Map className="w-8 h-8 fill-current drop-shadow-sm" />
-                    <span className="tracking-tight">RERD</span>
-                </div>
-                <div className="flex items-center justify-end flex-1 gap-3">
-                     {fileName && (
-                        <button onClick={() => setShowUploadModal(true)} className="flex items-center gap-3 pr-4 py-1.5 bg-transparent hover:bg-white/50 border border-transparent hover:border-white/60 rounded-full transition-all group cursor-pointer h-12">
-                            <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm text-scbx ml-1.5">
-                                <FileText className="w-5 h-5" />
-                            </div>
-                            <div className="flex flex-col items-start min-w-0">
-                                <span className="text-xs font-bold text-gray-900 leading-none mb-0.5">{projects.length} Projects</span>
-                                <span className="text-[10px] text-gray-500 font-medium truncate max-w-[120px] leading-none">{fileName}</span>
-                            </div>
-                            <div className="w-px h-6 bg-gray-300/50 mx-1"></div>
-                            <div className="bg-gray-100 rounded-full p-1.5 group-hover:bg-scbx group-hover:text-white transition-colors">
-                                 <RefreshCw className="w-3.5 h-3.5" />
-                            </div>
+            {/* Top Bar Navigation (Matching Screenshot Design) */}
+            <header className="fixed top-4 left-4 right-4 z-50 flex items-center justify-between pointer-events-none">
+                {/* Brand Pill */}
+                <div className="flex items-center h-12 bg-white rounded-full shadow-lg border border-white/50 px-4 pointer-events-auto">
+                    <div className="flex items-center gap-2 text-scbx font-bold text-xl select-none">
+                        <MapIcon className="w-6 h-6 fill-current" />
+                        <span className="tracking-tight">RERD</span>
+                    </div>
+                    {fileName && (
+                        <div className="flex items-center ml-4 pl-4 border-l border-gray-100 min-w-0">
+                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mr-2">Loaded:</span>
+                            <span className="text-xs font-bold text-gray-800 truncate max-w-[120px]">{fileName}</span>
+                            <button onClick={() => setShowUploadModal(true)} className="ml-2 p-1.5 hover:bg-gray-100 rounded-full text-gray-400 hover:text-scbx transition-colors">
+                                <RefreshCw className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    )}
+                    {!fileName && (
+                        <button onClick={() => setShowUploadModal(true)} className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-100 text-scbx hover:text-scbxHover transition-colors">
+                            <Upload className="w-4 h-4" />
+                            <span className="text-xs font-bold uppercase tracking-wide">Upload CSV</span>
                         </button>
-                     )}
+                    )}
+                </div>
+
+                {/* Export Button Pill */}
+                <div className="pointer-events-auto">
+                    <button onClick={() => setShowExportModal(true)} className="flex items-center gap-2 h-12 px-6 bg-white rounded-full shadow-lg border border-white/50 text-gray-800 font-bold hover:bg-gray-50 transition-all hover:scale-105 active:scale-95 group">
+                        <Download className="w-5 h-5 text-scbx group-hover:translate-y-0.5 transition-transform" />
+                        <span className="text-sm">Export report</span>
+                    </button>
                 </div>
             </header>
 
-            <div className="fixed top-4 right-4 z-50 flex items-center gap-3">
-                 <button onClick={() => setShowExportModal(true)} className="flex items-center gap-2 h-14 px-5 bg-white/75 backdrop-blur-2xl border border-white/50 shadow-xl rounded-2xl text-gray-700 font-bold hover:bg-white transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer">
-                    <Download className="w-5 h-5 text-scbx" />
-                    <span>Export report</span>
-                </button>
+            {/* Project Details Panel (Conditional on selection) */}
+            <ProjectDetailPanel 
+                project={selectedProject} 
+                onClose={() => setSelectedProject(null)} 
+                className={detailsPanelClass}
+            />
+            
+            {/* Sidebar (Filters) */}
+            <div 
+                className="absolute top-24 left-4 bottom-4 z-20 transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)]"
+                style={{ width: sidebarWidth }}
+            >
+                <div className="h-full w-full bg-white/75 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/50 overflow-hidden flex flex-col relative transition-all duration-300">
+                    <Sidebar 
+                        searchState={searchState}
+                        setSearchState={setSearchState}
+                        availableTypes={availableTypes}
+                        allProjects={projects}
+                        unifiedSearchInput={unifiedSearchInput}
+                        setUnifiedSearchInput={setUnifiedSearchInput}
+                        handleSearchAction={handleSearchAction}
+                        handleResetFilters={handleResetFilters}
+                        isCollapsed={!isSidebarExpanded}
+                        onToggle={() => setIsSidebarExpanded(!isSidebarExpanded)}
+                    />
+                </div>
             </div>
 
-            {projects.length === 0 ? (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/40 backdrop-blur-sm">
-                    <div className="text-center space-y-6 bg-white/80 backdrop-blur-xl p-12 rounded-3xl shadow-2xl border border-white/50 max-w-lg mx-4">
-                        <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-indigo-50 text-scbx shadow-inner">
-                            <Map className="w-12 h-12 drop-shadow-sm" />
-                        </div>
-                        <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Real Estate Dashboard</h1>
-                        <p className="text-lg text-gray-600 font-medium">Upload your CSV to visualize and analyze market data</p>
-                        <button onClick={() => setShowUploadModal(true)} className="bg-scbx hover:bg-scbxHover text-white px-10 py-4 rounded-full font-bold text-lg shadow-xl hover:shadow-2xl transition transform hover:-translate-y-1">
-                            Upload CSV
-                        </button>
-                    </div>
-                </div>
-            ) : (
-                <>
-                    <ProjectDetailPanel 
-                        project={selectedProject} 
-                        onClose={() => setSelectedProject(null)} 
-                        className={detailsPanelClass}
-                    />
-                    
-                    <div 
-                        className="absolute top-24 left-4 bottom-4 z-20 transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)]"
-                        style={{ width: sidebarWidth }}
-                    >
-                        <div className="h-full w-full bg-white/75 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/50 overflow-hidden flex flex-col relative transition-all duration-300">
-                            <Sidebar 
-                                searchState={searchState}
-                                setSearchState={setSearchState}
-                                availableTypes={availableTypes}
-                                allProjects={projects}
-                                unifiedSearchInput={unifiedSearchInput}
-                                setUnifiedSearchInput={setUnifiedSearchInput}
-                                handleSearchAction={handleSearchAction}
-                                handleResetFilters={handleResetFilters}
-                                isCollapsed={!isSidebarExpanded}
-                                onToggle={() => setIsSidebarExpanded(!isSidebarExpanded)}
-                            />
-                        </div>
-                    </div>
+            {/* Results Panel */}
+            <div 
+                className={`
+                    absolute top-24 bottom-4 z-10
+                    ${resultsPanelLeft}
+                    w-[min(calc(100%-16px),380px)]
+                    bg-white/75 backdrop-blur-2xl shadow-2xl rounded-3xl border border-white/50
+                    flex flex-col transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] origin-left
+                    translate-x-0 opacity-100
+                `}
+            >
+                <ResultsPanel 
+                    projects={filteredProjects}
+                    totalCount={filteredProjects.length}
+                    searchState={searchState}
+                    setSearchState={setSearchState}
+                    onProjectClick={handleProjectSelect}
+                    onProjectHover={(id) => setHoveredProjectId(id)}
+                    selectedProjectId={selectedProject?.projectId || null}
+                    onPlacesFetched={setNearbyPlaces}
+                    onPlaceClick={handlePlaceSelect}
+                />
+            </div>
 
-                    <div 
-                        className={`
-                            absolute top-24 bottom-4 z-10
-                            ${resultsPanelLeft}
-                            w-[min(calc(100%-16px),380px)]
-                            bg-white/75 backdrop-blur-2xl shadow-2xl rounded-3xl border border-white/50
-                            flex flex-col transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] origin-left
-                            translate-x-0 opacity-100
-                        `}
-                    >
-                        <ResultsPanel 
-                            projects={filteredProjects}
-                            totalCount={filteredProjects.length}
-                            searchState={searchState}
-                            setSearchState={setSearchState}
-                            onProjectClick={handleProjectSelect}
-                            onProjectHover={(id) => setHoveredProjectId(id)}
-                            selectedProjectId={selectedProject?.projectId || null}
-                            onPlacesFetched={setNearbyPlaces}
-                            onPlaceClick={handlePlaceSelect}
-                        />
-                    </div>
-                </>
-            )}
-
+            {/* Upload Modal Overlay */}
             {showUploadModal && (
                 <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white/75 backdrop-blur-2xl rounded-3xl shadow-2xl w-full max-w-md p-8 relative border border-white/50 animate-in zoom-in-95 duration-200">
+                    <div className="bg-white/90 backdrop-blur-2xl rounded-3xl shadow-2xl w-full max-w-md p-8 relative border border-white/50 animate-in zoom-in-95 duration-200">
                          {projects.length > 0 && (
                             <button onClick={() => setShowUploadModal(false)} className="absolute top-5 right-5 text-gray-400 hover:text-black transition">
                                 <X className="w-6 h-6" />
                             </button>
                          )}
-                        <h3 className="text-2xl font-bold text-gray-900 mb-6">Import Data</h3>
+                        <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">Import Market Data</h3>
                         <div className="bg-white/50 rounded-2xl p-10 border-2 border-dashed border-gray-300 text-center hover:bg-white/80 hover:border-scbx transition-all cursor-pointer relative group">
                             <input type="file" accept=".csv" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
                             <div className="bg-white p-4 rounded-full inline-block shadow-sm mb-4 group-hover:scale-110 transition-transform">
@@ -394,6 +359,7 @@ const App: React.FC = () => {
                 </div>
             )}
 
+            {/* Export View */}
             {showExportModal && (
                 <ExportDashboard 
                     projects={filteredProjects} 
@@ -404,6 +370,7 @@ const App: React.FC = () => {
                 />
             )}
 
+            {/* Loading Indicator */}
             {loading && (
                 <div className="fixed inset-0 z-[200] bg-black/30 backdrop-blur-md flex items-center justify-center">
                     <div className="bg-white/75 backdrop-blur-2xl p-8 rounded-3xl shadow-2xl flex flex-col items-center border border-white/50">
