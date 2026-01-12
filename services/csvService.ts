@@ -8,7 +8,7 @@ export const parseCSV = (file: File): Promise<Project[]> => {
       skipEmptyLines: true,
       beforeFirstChunk: (chunk) => {
         const lines = chunk.split(/\r\n|\r|\n/);
-        const headerIndex = lines.findIndex(l => l.includes('Latitude') && l.includes('Longitude'));
+        const headerIndex = lines.findIndex(l => l.toLowerCase().includes('latitude') && l.toLowerCase().includes('longitude'));
         if (headerIndex > 0) {
           return lines.slice(headerIndex).join('\n');
         }
@@ -19,9 +19,23 @@ export const parseCSV = (file: File): Promise<Project[]> => {
           const rawData = results.data;
           const groupedData: Record<string, any[]> = {};
 
+          // Helper to find value by possible keys (case-insensitive & trimmed)
+          const getValue = (row: any, possibleKeys: string[]) => {
+             const rowKeys = Object.keys(row);
+             for (const key of possibleKeys) {
+                 // Direct check
+                 if (row[key] !== undefined && row[key] !== '') return row[key];
+                 
+                 // Case-insensitive check
+                 const foundKey = rowKeys.find(k => k.trim().toLowerCase() === key.toLowerCase());
+                 if (foundKey && row[foundKey] !== undefined && row[foundKey] !== '') return row[foundKey];
+             }
+             return null;
+          };
+
           // Group by ID
           rawData.forEach((row: any) => {
-            const id = row['ID'] || row['id'];
+            const id = getValue(row, ['ID', 'id', 'project_id', 'Project ID']);
             if (!id) return;
             if (!groupedData[id]) groupedData[id] = [];
             groupedData[id].push(row);
@@ -32,8 +46,12 @@ export const parseCSV = (file: File): Promise<Project[]> => {
           Object.keys(groupedData).forEach(id => {
             const rows = groupedData[id];
             const baseRow = rows[0];
-            const lat = parseFloat(baseRow['Latitude'] || baseRow['latitude'] || '0');
-            const lng = parseFloat(baseRow['Longitude'] || baseRow['longitude'] || '0');
+            
+            const latStr = getValue(baseRow, ['Latitude', 'lat']);
+            const lngStr = getValue(baseRow, ['Longitude', 'lng', 'lon']);
+            
+            const lat = parseFloat(latStr || '0');
+            const lng = parseFloat(lngStr || '0');
 
             if (!lat || !lng) return;
 
@@ -45,15 +63,30 @@ export const parseCSV = (file: File): Promise<Project[]> => {
             const prices: number[] = [];
 
             rows.forEach((r: any) => {
-              const type = r['Type'] || 'Unknown';
-              const usable = parseFloat(r['Usable Area (sq.m.)']) || 0;
-              const land = parseFloat(r['Land Area (sq.w.)']) || 0;
-              const total = parseFloat(r['Total units']) || 0;
-              const sold = parseFloat(r['Sold Units']) || 0;
-              const price = parseFloat(r['Avg. Price (Units)']) || 0;
-              const speed6m = parseFloat(r['Sale Speed (6 เดือน)']) || 0;
-              const speed = parseFloat(r['Sale Speed']) || 0;
-              const launchDate = r['Launch date (YY.MM)'] || '-';
+              const type = getValue(r, ['Type', 'Product Type', 'Unit Type']) || 'Unknown';
+              
+              const usableStr = getValue(r, ['Usable Area (sq.m.)', 'Usable Area', 'Size']);
+              const usable = parseFloat(usableStr) || 0;
+              
+              const landStr = getValue(r, ['Land Area (sq.w.)', 'Land Area']);
+              const land = parseFloat(landStr) || 0;
+              
+              const totalStr = getValue(r, ['Total units', 'Total Units', 'Units']);
+              const total = parseFloat(totalStr) || 0;
+              
+              const soldStr = getValue(r, ['Sold Units', 'Sold']);
+              const sold = parseFloat(soldStr) || 0;
+              
+              const priceStr = getValue(r, ['Avg. Price (Units)', 'Price', 'Avg Price', 'Avg. Price']);
+              const price = parseFloat(priceStr) || 0;
+              
+              const speed6mStr = getValue(r, ['Sale Speed (6 เดือน)', 'Sale Speed 6m', 'Speed 6m', 'Sale Speed (6 Months)']);
+              const speed6m = parseFloat(speed6mStr) || 0;
+              
+              const speedStr = getValue(r, ['Sale Speed', 'Speed', 'Total Sale Speed']);
+              const speed = parseFloat(speedStr) || 0;
+              
+              const launchDate = getValue(r, ['Launch date (YY.MM)', 'Launch Date', 'Launch']) || '-';
 
               projTotalUnits += total;
               projSoldUnits += sold;
@@ -63,9 +96,9 @@ export const parseCSV = (file: File): Promise<Project[]> => {
 
               const perSold = total ? (sold / total) * 100 : 0;
 
-              let priceStr = '-';
+              let priceDisplay = '-';
               if (price > 0) {
-                priceStr = (price < 1000 ? price : price / 1000000).toFixed(2) + ' MB';
+                priceDisplay = (price < 1000 ? price : price / 1000000).toFixed(2) + ' MB';
               }
 
               subUnits.push({
@@ -76,7 +109,7 @@ export const parseCSV = (file: File): Promise<Project[]> => {
                 soldUnits: sold,
                 percentSold: perSold,
                 price,
-                priceStr,
+                priceStr: priceDisplay,
                 launchDate,
                 saleSpeed: speed.toFixed(2),
                 saleSpeed6m: speed6m.toFixed(2)
@@ -93,13 +126,17 @@ export const parseCSV = (file: File): Promise<Project[]> => {
               priceRange = minP === maxP ? `${minStr} MB` : `${minStr} - ${maxStr} MB`;
             }
 
+            const code = getValue(baseRow, ['Area Code', 'Code Area', 'Code', 'AREA Code', 'Zone', 'Location Code', 'Zone Code']);
+            const name = getValue(baseRow, ['Project Name', 'Name', 'Project']);
+            const developer = getValue(baseRow, ['Developer', 'Dev']) || '-';
+
             processedProjects.push({
               projectId: id,
               lat,
               lng,
-              code: baseRow['AREA Code'] || baseRow['Code Area'] || 'XX',
-              name: baseRow['Project Name'] || 'Unknown',
-              developer: baseRow['Developer'] || '-',
+              code: code || 'XX',
+              name: name || 'Unknown',
+              developer: developer,
               subUnits,
               totalUnits: projTotalUnits,
               soldUnits: projSoldUnits,
