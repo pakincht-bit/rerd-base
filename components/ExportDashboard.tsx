@@ -98,7 +98,6 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
         });
 
         const avgSold = totalUnits ? (totalSold / totalUnits) * 100 : 0;
-        const avgSpeed = totalSpeed / total;
         
         // Calculated Global Weighted Average Price
         const avgPrice = totalSalesUnits > 0 ? totalSalesVolume / totalSalesUnits : 0;
@@ -136,7 +135,7 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
         return {
             total,
             avgSold,
-            avgSpeed,
+            totalSpeed, // Changed from avgSpeed to totalSpeed (Sum)
             avgPrice,
             sortedTypes,
             pieChartData,
@@ -368,9 +367,9 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
                             <div className="p-5 rounded-2xl bg-green-50/50 border border-green-100/50">
                                 <div className="flex items-center gap-2 text-scbx mb-2">
                                     <TrendingUp className="w-4 h-4" />
-                                    <span className="text-xs font-bold uppercase">Avg. Sale Speed</span>
+                                    <span className="text-xs font-bold uppercase">Total Sale Speed</span>
                                 </div>
-                                <div className="text-3xl font-bold text-gray-900">{stats.avgSpeed.toFixed(2)} <span className="text-sm text-gray-500 font-medium">unit/mo</span></div>
+                                <div className="text-3xl font-bold text-gray-900">{stats.totalSpeed.toFixed(2)} <span className="text-sm text-gray-500 font-medium">unit/mo</span></div>
                             </div>
                             <div className="p-5 rounded-2xl bg-orange-50/50 border border-orange-100">
                                 <div className="flex items-center gap-2 text-orange-600 mb-2">

@@ -145,25 +145,18 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <PanelLeftOpen className="w-6 h-6" />
                 </button>
 
-                <div className="flex flex-col gap-5 w-full items-center overflow-y-auto custom-scrollbar no-scrollbar flex-1">
+                <div className="flex flex-col gap-5 w-full items-center overflow-y-auto custom-scrollbar no-scrollbar flex-1 pb-4">
+                    {/* Search Mode Icon */}
                     <div className="flex flex-col items-center gap-1.5 group cursor-default">
-                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm border transition-all ${searchState.searchMode === 'location' ? 'bg-scbx text-white border-scbx' : 'bg-white text-gray-500 border-gray-200'}`}>
+                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm border transition-all ${searchState.searchMode === 'location' ? 'bg-scbx text-white border-scbx' : 'bg-black text-white border-black'}`}>
                             {searchState.searchMode === 'location' ? <MapPin className="w-5 h-5" /> : <Hash className="w-5 h-5" />}
                         </div>
-                         {searchState.searchMode === 'location' && (
-                            <span className="text-[10px] font-bold text-gray-600 bg-white/50 px-2 py-0.5 rounded-full border border-gray-200 backdrop-blur-sm">
-                                {searchState.radius}km
-                            </span>
-                        )}
-                        {searchState.searchMode === 'code' && searchState.codeFilter.length > 0 && (
-                            <span className="text-[10px] font-bold text-gray-600 bg-white/50 px-2 py-0.5 rounded-full border border-gray-200 backdrop-blur-sm">
-                                {searchState.codeFilter.length > 1 ? `${searchState.codeFilter.length}` : searchState.codeFilter[0]}
-                            </span>
-                        )}
+                        <span className="text-[10px] font-bold text-gray-400">Mode</span>
                     </div>
 
                     <div className="w-8 h-px bg-gray-200/50"></div>
 
+                    {/* Type Filter Icon */}
                     <div className="flex flex-col items-center gap-1.5 relative group">
                         <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm border transition-all ${searchState.typeFilter.length > 0 ? 'bg-black text-white border-black' : 'bg-white text-gray-300 border-gray-200'}`}>
                             <Home className="w-5 h-5" />
@@ -173,40 +166,37 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 {searchState.typeFilter.length}
                              </span>
                         )}
-                        <span className="text-[9px] font-bold text-gray-400">Type</span>
+                        <span className="text-[10px] font-bold text-gray-400">Type</span>
                     </div>
 
-                    {searchState.minLaunchDate && (
-                         <div className="flex flex-col items-center gap-1.5 relative group">
-                            <div className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm border bg-black text-white border-black">
-                                <Calendar className="w-5 h-5" />
-                            </div>
-                            <span className="text-[9px] font-bold text-gray-400">Since {searchState.minLaunchDate}</span>
+                    {/* Launch Date Icon - Now Persistent */}
+                    <div className="flex flex-col items-center gap-1.5 relative group">
+                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm border transition-all ${searchState.minLaunchDate ? 'bg-black text-white border-black' : 'bg-white text-gray-300 border-gray-200'}`}>
+                            <Calendar className="w-5 h-5" />
                         </div>
-                    )}
+                        <span className="text-[10px] font-bold text-gray-400">Launch</span>
+                    </div>
 
-                    {searchState.maxSoldPercent < 100 && (
-                        <div className="flex flex-col items-center gap-1.5 relative group">
-                            <div className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm border bg-black text-white border-black">
-                                <Percent className="w-5 h-5" />
-                            </div>
-                            <span className="text-[9px] font-bold text-gray-400">≤{searchState.maxSoldPercent}%</span>
+                    {/* Sold % Icon - Now Persistent */}
+                    <div className="flex flex-col items-center gap-1.5 relative group">
+                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm border transition-all ${searchState.maxSoldPercent < 100 ? 'bg-black text-white border-black' : 'bg-white text-gray-300 border-gray-200'}`}>
+                            <Percent className="w-5 h-5" />
                         </div>
-                    )}
+                        <span className="text-[10px] font-bold text-gray-400">Sold %</span>
+                    </div>
 
-                    {searchState.searchMode === 'location' && (
-                        <div className="flex flex-col items-center gap-1.5 relative group">
-                            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm border transition-all ${searchState.codeFilter.length > 0 ? 'bg-black text-white border-black' : 'bg-white text-gray-300 border-gray-200'}`}>
-                                <Hash className="w-5 h-5" />
-                            </div>
-                            {searchState.codeFilter.length > 0 && (
-                                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-scbx text-[9px] font-bold text-white shadow-sm ring-2 ring-white">
-                                    {searchState.codeFilter.length}
-                                </span>
-                            )}
-                            <span className="text-[9px] font-bold text-gray-400">Area</span>
+                    {/* Area/Code Icon */}
+                    <div className="flex flex-col items-center gap-1.5 relative group">
+                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm border transition-all ${searchState.codeFilter.length > 0 ? 'bg-black text-white border-black' : 'bg-white text-gray-300 border-gray-200'}`}>
+                            <Hash className="w-5 h-5" />
                         </div>
-                    )}
+                        {searchState.codeFilter.length > 0 && (
+                            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-scbx text-[9px] font-bold text-white shadow-sm ring-2 ring-white">
+                                {searchState.codeFilter.length}
+                            </span>
+                        )}
+                        <span className="text-[10px] font-bold text-gray-400">Area</span>
+                    </div>
                 </div>
 
                  <button 
