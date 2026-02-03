@@ -108,7 +108,7 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                                     <th className="px-2 py-3 text-right">Area</th>
                                     <th className="px-2 py-3 text-right border-r border-gray-200/50">Land</th>
 
-                                    <th className="px-2 py-3 text-right">Spd 6m</th>
+                                    <th className="px-2 py-3 text-right">Sale Speed</th>
                                     <th className="px-2 py-3 text-right">Speed</th>
                                     <th className="px-2 py-3 text-right">Sold %</th>
                                 </tr>
@@ -127,7 +127,32 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                                         <td className="px-2 py-2.5 text-right text-gray-600 font-mono border-r border-gray-100">{u.landArea}</td>
 
                                         {/* Group 3: Sales */}
-                                        <td className="px-2 py-2.5 text-right text-gray-600 font-mono">{u.saleSpeed6m}</td>
+                                        <td className="px-2 py-2.5 text-right text-gray-600 font-mono">
+                                            {(() => {
+                                                // Get most recent period key (highest year, H2 > H1)
+                                                if (u.history) {
+                                                    const keys = Object.keys(u.history)
+                                                        .filter(k => /^H[12]\.\d+/.test(k) && !k.toLowerCase().includes('(12m)'))
+                                                        .sort((a, b) => {
+                                                            // Parse H1.65 or H2.66 format
+                                                            const parseKey = (k: string) => {
+                                                                const match = k.match(/^H([12])\.(\d+)/);
+                                                                if (!match) return { half: 0, year: 0 };
+                                                                return { half: parseInt(match[1]), year: parseInt(match[2]) };
+                                                            };
+                                                            const aVal = parseKey(a);
+                                                            const bVal = parseKey(b);
+                                                            // Sort by year descending, then by half descending (H2 > H1)
+                                                            if (bVal.year !== aVal.year) return bVal.year - aVal.year;
+                                                            return bVal.half - aVal.half;
+                                                        });
+                                                    if (keys.length > 0) {
+                                                        return u.history[keys[0]]?.toFixed(2) || '-';
+                                                    }
+                                                }
+                                                return '-';
+                                            })()}
+                                        </td>
                                         <td className="px-2 py-2.5 text-right text-gray-600 font-mono">{u.saleSpeed}</td>
                                         <td className="px-2 py-2.5 text-right font-mono">
                                             <div className="flex flex-col items-end">
@@ -150,6 +175,13 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                 </h3>
                 <div className="bg-white/50 rounded-2xl border border-gray-100 p-5 shadow-sm backdrop-blur-sm">
                     <div className="grid grid-cols-[100px_1fr] gap-y-3 text-sm items-center">
+
+                        <div className="text-gray-500 font-medium">Project ID</div>
+                        <div className="font-mono font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded w-fit text-xs">
+                            {project!.projectId}
+                        </div>
+
+                        <div className="h-px bg-gray-100 col-span-2 my-1"></div>
 
                         <div className="text-gray-500 font-medium">Price Range</div>
                         {/* Updated font-bold to font-medium */}
@@ -343,11 +375,10 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                                 <div className="flex flex-col gap-0.5">
                                     {currentSeriesData.map(s => {
                                         const val = s.data[hoveredPoint.pointIndex];
-                                        if (val === undefined || val === 0) return null;
                                         return (
                                             <div key={s.type} className="flex items-center gap-1 whitespace-nowrap">
                                                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }}></span>
-                                                <span>{s.type}: {val.toFixed(2)}</span>
+                                                <span>{s.type}: {val !== undefined && val !== 0 ? val.toFixed(2) : '-'}</span>
                                             </div>
                                         );
                                     })}
@@ -367,7 +398,7 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                             </div>
                         ))}
                     </div>
-                </div>
+                </div >
             );
         };
 

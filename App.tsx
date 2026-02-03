@@ -4,7 +4,7 @@ import { Project, SearchState, AIAnalysisResult, NearbyPlace } from './types';
 import Sidebar from './components/Sidebar';
 import MapComponent from './components/Map';
 import ProjectDetailPanel from './components/ProjectDetailPanel';
-import ResultsPanel from './components/FilterModal'; 
+import ResultsPanel from './components/FilterModal';
 import ExportDashboard from './components/ExportDashboard';
 import { parseCSV } from './services/csvService';
 import { generateMarketAnalysis } from './services/geminiService';
@@ -15,8 +15,8 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
@@ -25,8 +25,8 @@ const App: React.FC = () => {
     const [fileName, setFileName] = useState<string>('');
     const [loading, setLoading] = useState(false);
     const [loadingText, setLoadingText] = useState('');
-    
-    const [isSidebarExpanded, setIsSidebarExpanded] = useState(true); 
+
+    const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
 
     const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
     const [activeProject, setActiveProject] = useState<Project | null>(null);
@@ -46,7 +46,8 @@ const App: React.FC = () => {
         minPrice: null,
         maxPrice: null,
         minLaunchDate: null,
-        maxSoldPercent: 100
+        maxSoldPercent: 100,
+        priceSegment: null
     });
 
     const [unifiedSearchInput, setUnifiedSearchInput] = useState('13.7563, 100.5018');
@@ -87,7 +88,7 @@ const App: React.FC = () => {
                     const validDates = p.subUnits
                         .map(u => parseFloat(u.launchDate))
                         .filter(d => !isNaN(d));
-                    
+
                     if (validDates.length === 0) return false;
                     return validDates.some(d => d >= minVal);
                 });
@@ -98,8 +99,34 @@ const App: React.FC = () => {
             data = data.filter(p => parseFloat(p.percentSold) <= searchState.maxSoldPercent);
         }
 
+        // Price segment filter
+        if (searchState.priceSegment) {
+            const getSegmentRange = (seg: string): { min: number, max: number } => {
+                switch (seg) {
+                    case '< 0.5': return { min: 0, max: 0.5 };
+                    case '0.5-1.0': return { min: 0.5, max: 1.0 };
+                    case '1.0-2.0': return { min: 1.0, max: 2.0 };
+                    case '2.0-3.0': return { min: 2.0, max: 3.0 };
+                    case '3.0-5.0': return { min: 3.0, max: 5.0 };
+                    case '5.0-10': return { min: 5.0, max: 10 };
+                    case '10-20': return { min: 10, max: 20 };
+                    case '> 20': return { min: 20, max: Infinity };
+                    default: return { min: 0, max: Infinity };
+                }
+            };
+            const range = getSegmentRange(searchState.priceSegment);
+            data = data.filter(p => {
+                const validPrices = p.subUnits.map(u => u.price).filter(price => price > 0);
+                if (validPrices.length === 0) return false;
+                const projectMin = Math.min(...validPrices);
+                const projectMax = Math.max(...validPrices);
+                // Project overlaps with segment if projectMin < range.max AND projectMax >= range.min
+                return projectMin < range.max && projectMax >= range.min;
+            });
+        }
+
         return data;
-    }, [projects, searchState.lat, searchState.lng, searchState.radius, searchState.typeFilter, searchState.minPrice, searchState.maxPrice, searchState.minLaunchDate, searchState.maxSoldPercent, searchState.searchMode]);
+    }, [projects, searchState.lat, searchState.lng, searchState.radius, searchState.typeFilter, searchState.minPrice, searchState.maxPrice, searchState.minLaunchDate, searchState.maxSoldPercent, searchState.priceSegment, searchState.searchMode]);
 
     const filteredProjects = useMemo(() => {
         let data = [...projectsInView];
@@ -117,8 +144,8 @@ const App: React.FC = () => {
             }
             if (searchState.sortBy === 'launchDate') {
                 const getLaunch = (p: Project) => {
-                     const dates = p.subUnits.map(u => u.launchDate).filter(d => d && d !== '-').sort();
-                     return dates.length > 0 ? dates[0] : '';
+                    const dates = p.subUnits.map(u => u.launchDate).filter(d => d && d !== '-').sort();
+                    return dates.length > 0 ? dates[0] : '';
                 };
                 const dateA = getLaunch(a);
                 const dateB = getLaunch(b);
@@ -201,12 +228,12 @@ const App: React.FC = () => {
     const handleProjectSelect = (project: Project) => {
         setActiveProject(project);
         setSelectedProject(project);
-        setActivePlace(null); 
+        setActivePlace(null);
     };
 
     const handlePlaceSelect = (place: NearbyPlace) => {
         setActivePlace(place);
-        setSelectedProject(null); 
+        setSelectedProject(null);
         setActiveProject(null);
     };
 
@@ -238,7 +265,7 @@ const App: React.FC = () => {
         <div className="flex flex-col h-screen text-[#222] overflow-hidden bg-gray-50 relative">
             {/* Background Map */}
             <div className="absolute inset-0 z-0">
-                 <MapComponent 
+                <MapComponent
                     center={[searchState.lat, searchState.lng]}
                     projects={filteredProjects}
                     radius={searchState.radius}
@@ -286,19 +313,19 @@ const App: React.FC = () => {
             </header>
 
             {/* Project Details Panel (Conditional on selection) */}
-            <ProjectDetailPanel 
-                project={selectedProject} 
-                onClose={() => setSelectedProject(null)} 
+            <ProjectDetailPanel
+                project={selectedProject}
+                onClose={() => setSelectedProject(null)}
                 className={detailsPanelClass}
             />
-            
+
             {/* Sidebar (Filters) */}
-            <div 
+            <div
                 className="absolute top-24 left-4 bottom-4 z-20 transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)]"
                 style={{ width: sidebarWidth }}
             >
                 <div className="h-full w-full bg-white/75 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/50 overflow-hidden flex flex-col relative transition-all duration-300">
-                    <Sidebar 
+                    <Sidebar
                         searchState={searchState}
                         setSearchState={setSearchState}
                         availableTypes={availableTypes}
@@ -314,7 +341,7 @@ const App: React.FC = () => {
             </div>
 
             {/* Results Panel */}
-            <div 
+            <div
                 className={`
                     absolute top-24 bottom-4 z-10
                     ${resultsPanelLeft}
@@ -324,7 +351,7 @@ const App: React.FC = () => {
                     translate-x-0 opacity-100
                 `}
             >
-                <ResultsPanel 
+                <ResultsPanel
                     projects={filteredProjects}
                     totalCount={filteredProjects.length}
                     searchState={searchState}
@@ -341,11 +368,11 @@ const App: React.FC = () => {
             {showUploadModal && (
                 <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-white/90 backdrop-blur-2xl rounded-3xl shadow-2xl w-full max-w-md p-8 relative border border-white/50 animate-in zoom-in-95 duration-200">
-                         {projects.length > 0 && (
+                        {projects.length > 0 && (
                             <button onClick={() => setShowUploadModal(false)} className="absolute top-5 right-5 text-gray-400 hover:text-black transition">
                                 <X className="w-6 h-6" />
                             </button>
-                         )}
+                        )}
                         <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">Import Market Data</h3>
                         <div className="bg-white/50 rounded-2xl p-10 border-2 border-dashed border-gray-300 text-center hover:bg-white/80 hover:border-scbx transition-all cursor-pointer relative group">
                             <input type="file" accept=".csv" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
@@ -361,10 +388,10 @@ const App: React.FC = () => {
 
             {/* Export View */}
             {showExportModal && (
-                <ExportDashboard 
-                    projects={filteredProjects} 
-                    radius={searchState.radius} 
-                    onClose={() => setShowExportModal(false)} 
+                <ExportDashboard
+                    projects={filteredProjects}
+                    radius={searchState.radius}
+                    onClose={() => setShowExportModal(false)}
                     onDownload={downloadDashboardImage}
                     activeTypes={searchState.typeFilter}
                 />

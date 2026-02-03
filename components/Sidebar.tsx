@@ -15,8 +15,8 @@ interface SidebarProps {
     onToggle: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ 
-    searchState, 
+const Sidebar: React.FC<SidebarProps> = ({
+    searchState,
     setSearchState,
     availableTypes,
     allProjects,
@@ -58,8 +58,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         const dLat = (lat2 - lat1) * Math.PI / 180;
         const dLon = (lon2 - lon1) * Math.PI / 180;
         const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     };
 
@@ -67,7 +67,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         if (searchState.searchMode === 'code') {
             return uniqueCodes;
         }
-        
+
         const codes = new Set<string>();
         allProjects.forEach(p => {
             if (!p.code) return;
@@ -98,7 +98,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 newCodeFilter = [uniqueCodes[0]];
             }
         }
-        
+
         setSearchState(prev => ({ ...prev, searchMode: mode, codeFilter: newCodeFilter }));
     };
 
@@ -137,7 +137,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (isCollapsed) {
         return (
             <aside className="w-full h-full flex flex-col items-center py-4 bg-transparent">
-                 <button 
+                <button
                     onClick={onToggle}
                     className="p-3 rounded-full hover:bg-black/5 text-gray-500 hover:text-gray-900 transition-colors mb-6 border border-transparent hover:border-black/10"
                     title="Expand Filters"
@@ -162,9 +162,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                             <Home className="w-5 h-5" />
                         </div>
                         {searchState.typeFilter.length > 0 && (
-                             <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-scbx text-[9px] font-bold text-white shadow-sm ring-2 ring-white">
+                            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-scbx text-[9px] font-bold text-white shadow-sm ring-2 ring-white">
                                 {searchState.typeFilter.length}
-                             </span>
+                            </span>
                         )}
                         <span className="text-[10px] font-bold text-gray-400">Type</span>
                     </div>
@@ -199,7 +199,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                 </div>
 
-                 <button 
+                <button
                     onClick={handleResetFilters}
                     className="mt-2 p-2 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-900 transition-colors"
                     title="Reset Filters"
@@ -217,7 +217,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                         Search projects
                     </h2>
-                    <button 
+                    <button
                         onClick={onToggle}
                         className="p-2 rounded-full hover:bg-white/60 text-gray-400 hover:text-gray-800 transition-colors"
                         title="Collapse Panel"
@@ -228,14 +228,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 
                 <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-1.5">
                     <div className="flex items-center gap-2">
-                         <div className="flex bg-gray-100 p-1 rounded-xl shrink-0">
-                            <button 
+                        <div className="flex bg-gray-100 p-1 rounded-xl shrink-0">
+                            <button
                                 onClick={() => handleModeSwitch('location')}
                                 className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${searchState.searchMode === 'location' ? 'bg-scbx text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                             >
                                 <MapPin className="w-3.5 h-3.5" /> Location
                             </button>
-                            <button 
+                            <button
                                 onClick={() => handleModeSwitch('code')}
                                 className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${searchState.searchMode === 'code' ? 'bg-scbx text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                             >
@@ -246,10 +246,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <div className="w-px h-7 bg-gray-100"></div>
 
                         <div className="flex-1 min-w-0 flex items-center gap-1">
-                             {searchState.searchMode === 'location' ? (
+                            {searchState.searchMode === 'location' ? (
                                 <>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         value={unifiedSearchInput}
                                         onChange={(e) => setUnifiedSearchInput(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && handleSearchAction()}
@@ -261,9 +261,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     )}
                                     <button onClick={handleSearchAction} className="w-8 h-8 bg-scbx text-white rounded-lg flex items-center justify-center shadow-sm hover:bg-scbxHover transition-colors"><Search className="w-3.5 h-3.5" /></button>
                                 </>
-                             ) : (
+                            ) : (
                                 <div className="flex-1 relative">
-                                    <button 
+                                    <button
                                         onClick={() => {
                                             if (!isAreaDropdownOpen) setAreaSearchQuery('');
                                             setIsAreaDropdownOpen(!isAreaDropdownOpen);
@@ -271,9 +271,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                                         className="w-full h-9 bg-transparent text-sm font-bold text-gray-700 outline-none appearance-none cursor-pointer flex items-center justify-between px-2 hover:bg-gray-50 rounded-lg transition-colors"
                                     >
                                         <span className="truncate pr-4 text-left">
-                                            {searchState.codeFilter.length === 0 
-                                                ? 'Select Areas...' 
-                                                : searchState.codeFilter.length > 3 
+                                            {searchState.codeFilter.length === 0
+                                                ? 'Select Areas...'
+                                                : searchState.codeFilter.length > 3
                                                     ? `${searchState.codeFilter.slice(0, 3).join(', ')} +${searchState.codeFilter.length - 3}`
                                                     : searchState.codeFilter.join(', ')}
                                         </span>
@@ -285,9 +285,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                                             <div className="fixed inset-0 z-30" onClick={() => setIsAreaDropdownOpen(false)}></div>
                                             <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-xl z-40 max-h-[300px] overflow-y-auto custom-scrollbar p-2 animate-in fade-in zoom-in-95 duration-200 flex flex-col">
                                                 <div className="sticky top-0 bg-white z-10 pb-2 px-1 border-b border-gray-50 mb-1">
-                                                     <div className="relative">
+                                                    <div className="relative">
                                                         <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                                                        <input 
+                                                        <input
                                                             type="text"
                                                             value={areaSearchQuery}
                                                             onChange={(e) => setAreaSearchQuery(e.target.value)}
@@ -296,50 +296,49 @@ const Sidebar: React.FC<SidebarProps> = ({
                                                             autoFocus
                                                             onClick={(e) => e.stopPropagation()}
                                                         />
-                                                     </div>
+                                                    </div>
                                                 </div>
 
-                                                 <div className="flex flex-col gap-1">
+                                                <div className="flex flex-col gap-1">
                                                     <div className="flex items-center justify-between px-2 py-1.5 mb-1 border-b border-gray-100">
-                                                         <span className="text-[10px] font-bold text-gray-400 uppercase">Available Areas ({filteredUniqueCodes.length})</span>
-                                                         {searchState.codeFilter.length > 0 && (
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); setSearchState(prev => ({...prev, codeFilter: []})); }}
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">Available Areas ({filteredUniqueCodes.length})</span>
+                                                        {searchState.codeFilter.length > 0 && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setSearchState(prev => ({ ...prev, codeFilter: [] })); }}
                                                                 className="text-[10px] text-red-500 font-bold hover:underline"
                                                             >
                                                                 Clear
                                                             </button>
-                                                         )}
+                                                        )}
                                                     </div>
                                                     {filteredUniqueCodes.map(code => {
-                                                         const isSelected = searchState.codeFilter.includes(code);
-                                                         return (
+                                                        const isSelected = searchState.codeFilter.includes(code);
+                                                        return (
                                                             <button
                                                                 key={code}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     handleCodeToggle(code);
                                                                 }}
-                                                                className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-                                                                    isSelected 
-                                                                    ? 'bg-black text-white shadow-sm' 
+                                                                className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all ${isSelected
+                                                                    ? 'bg-black text-white shadow-sm'
                                                                     : 'text-gray-600 hover:bg-gray-50'
-                                                                }`}
+                                                                    }`}
                                                             >
                                                                 <span>{code}</span>
                                                                 {isSelected && <Check className="w-3.5 h-3.5" />}
                                                             </button>
-                                                         )
-                                                     })}
-                                                     {filteredUniqueCodes.length === 0 && (
+                                                        )
+                                                    })}
+                                                    {filteredUniqueCodes.length === 0 && (
                                                         <div className="p-3 text-center text-xs text-gray-400 italic">No area found</div>
-                                                     )}
-                                                 </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </>
                                     )}
                                 </div>
-                             )}
+                            )}
                         </div>
                     </div>
                 </div>
@@ -350,11 +349,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                             <button
                                 key={r}
                                 onClick={() => handleRadiusChange(r)}
-                                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all border text-center ${
-                                    searchState.radius === r 
-                                    ? 'bg-black text-white border-black shadow-md' 
+                                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all border text-center ${searchState.radius === r
+                                    ? 'bg-black text-white border-black shadow-md'
                                     : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
-                                }`}
+                                    }`}
                             >
                                 {r} km
                             </button>
@@ -364,12 +362,12 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
-                
+
                 <section className="animate-fadeInUp">
                     <div className="flex justify-between items-center mb-3">
                         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Property Type</h3>
                         {searchState.typeFilter.length > 0 && (
-                            <button onClick={() => setSearchState(prev => ({...prev, typeFilter: []}))} className="text-[10px] text-gray-500 underline hover:text-black">Clear</button>
+                            <button onClick={() => setSearchState(prev => ({ ...prev, typeFilter: [] }))} className="text-[10px] text-gray-500 underline hover:text-black">Clear</button>
                         )}
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -379,11 +377,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 <button
                                     key={t}
                                     onClick={() => handleTypeToggle(t)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
-                                        isSelected 
-                                        ? 'bg-black text-white border-black shadow-md' 
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${isSelected
+                                        ? 'bg-black text-white border-black shadow-md'
                                         : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-                                    }`}
+                                        }`}
                                 >
                                     {t}
                                 </button>
@@ -395,8 +392,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <section className="animate-fadeInUp delay-100">
                     <div className="flex justify-between items-center mb-3">
                         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Launch Date (Since)</h3>
-                         {searchState.minLaunchDate && (
-                            <button onClick={() => setSearchState(prev => ({...prev, minLaunchDate: null}))} className="text-[10px] text-gray-500 underline hover:text-black">Clear</button>
+                        {searchState.minLaunchDate && (
+                            <button onClick={() => setSearchState(prev => ({ ...prev, minLaunchDate: null }))} className="text-[10px] text-gray-500 underline hover:text-black">Clear</button>
                         )}
                     </div>
                     <div className="flex gap-2">
@@ -404,9 +401,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                             <select
                                 value={currentLaunchYear}
                                 onChange={(e) => handleLaunchDateChange(e.target.value, currentLaunchMonth)}
-                                className={`w-full appearance-none pl-3 pr-8 py-2 border rounded-lg text-xs font-bold bg-white focus:outline-none focus:ring-1 focus:ring-black cursor-pointer transition-all ${
-                                    currentLaunchYear ? 'border-black text-black' : 'border-gray-200 text-gray-500'
-                                }`}
+                                className={`w-full appearance-none pl-3 pr-8 py-2 border rounded-lg text-xs font-bold bg-white focus:outline-none focus:ring-1 focus:ring-black cursor-pointer transition-all ${currentLaunchYear ? 'border-black text-black' : 'border-gray-200 text-gray-500'
+                                    }`}
                             >
                                 <option value="">Year...</option>
                                 {availableYears.map(year => (
@@ -421,10 +417,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 value={currentLaunchMonth}
                                 onChange={(e) => handleLaunchDateChange(currentLaunchYear, e.target.value)}
                                 disabled={!currentLaunchYear}
-                                className={`w-full appearance-none pl-3 pr-6 py-2 border rounded-lg text-xs font-bold bg-white focus:outline-none focus:ring-1 focus:ring-black cursor-pointer transition-all ${
-                                    !currentLaunchYear ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed' :
+                                className={`w-full appearance-none pl-3 pr-6 py-2 border rounded-lg text-xs font-bold bg-white focus:outline-none focus:ring-1 focus:ring-black cursor-pointer transition-all ${!currentLaunchYear ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed' :
                                     currentLaunchMonth ? 'border-black text-black' : 'border-gray-200 text-gray-500'
-                                }`}
+                                    }`}
                             >
                                 {Array.from({ length: 12 }, (_, i) => {
                                     const m = (i + 1).toString().padStart(2, '0');
@@ -443,10 +438,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <span className="text-xs font-bold text-scbx">≤ {searchState.maxSoldPercent}%</span>
                     </div>
                     <div className="px-1">
-                        <input 
-                            type="range" 
-                            min="0" 
-                            max="100" 
+                        <input
+                            type="range"
+                            min="0"
+                            max="100"
                             step="1"
                             value={searchState.maxSoldPercent}
                             onChange={(e) => setSearchState(prev => ({ ...prev, maxSoldPercent: parseInt(e.target.value) }))}
@@ -463,15 +458,46 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                 </section>
 
+                {/* Price Range Filter */}
+                <section className="animate-fadeInUp delay-200">
+                    <div className="flex justify-between items-center mb-3">
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Price Range (MB)</h3>
+                        {(searchState.minPrice !== null || searchState.maxPrice !== null) && (
+                            <button onClick={() => setSearchState(prev => ({ ...prev, minPrice: null, maxPrice: null }))} className="text-[10px] text-gray-500 underline hover:text-black">Clear</button>
+                        )}
+                    </div>
+                    <div className="flex gap-2 items-center">
+                        <div className="flex-1">
+                            <input
+                                type="number"
+                                placeholder="Min"
+                                value={searchState.minPrice ?? ''}
+                                onChange={(e) => setSearchState(prev => ({ ...prev, minPrice: e.target.value ? parseFloat(e.target.value) : null }))}
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-black focus:border-black transition-all"
+                            />
+                        </div>
+                        <span className="text-gray-400 text-xs font-bold">-</span>
+                        <div className="flex-1">
+                            <input
+                                type="number"
+                                placeholder="Max"
+                                value={searchState.maxPrice ?? ''}
+                                onChange={(e) => setSearchState(prev => ({ ...prev, maxPrice: e.target.value ? parseFloat(e.target.value) : null }))}
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-black focus:border-black transition-all"
+                            />
+                        </div>
+                    </div>
+                </section>
+
                 {searchState.searchMode === 'location' && (
                     <section>
-                         <div className="flex justify-between items-center mb-3">
+                        <div className="flex justify-between items-center mb-3">
                             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Filter by Code</h3>
                             {searchState.codeFilter.length > 0 && (
-                                <button onClick={() => setSearchState(prev => ({...prev, codeFilter: []}))} className="text-[10px] text-gray-500 underline hover:text-black">Clear</button>
+                                <button onClick={() => setSearchState(prev => ({ ...prev, codeFilter: [] }))} className="text-[10px] text-gray-500 underline hover:text-black">Clear</button>
                             )}
                         </div>
-                        
+
                         <div>
                             <div className="flex flex-col gap-3">
                                 {visibleCodes.length === 0 && (
@@ -489,11 +515,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                                                     <button
                                                         key={code}
                                                         onClick={() => handleCodeToggle(code)}
-                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
-                                                            isSelected 
-                                                            ? 'bg-black text-white border-black shadow-md' 
+                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${isSelected
+                                                            ? 'bg-black text-white border-black shadow-md'
                                                             : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         {code}
                                                     </button>
