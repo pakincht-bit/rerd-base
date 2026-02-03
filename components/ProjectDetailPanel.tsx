@@ -129,12 +129,12 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                                         {/* Group 3: Sales */}
                                         <td className="px-2 py-2.5 text-right text-gray-600 font-mono">
                                             {(() => {
-                                                // Get most recent period key (highest year, H2 > H1)
+                                                // Get most recent period key with (12m) - matching trend graph
                                                 if (u.history) {
                                                     const keys = Object.keys(u.history)
-                                                        .filter(k => /^H[12]\.\d+/.test(k) && !k.toLowerCase().includes('(12m)'))
+                                                        .filter(k => /^H[12]\.\d+/.test(k) && k.toLowerCase().includes('(12m)'))
                                                         .sort((a, b) => {
-                                                            // Parse H1.65 or H2.66 format
+                                                            // Parse H1.65 (12m) or H2.66 (12m) format
                                                             const parseKey = (k: string) => {
                                                                 const match = k.match(/^H([12])\.(\d+)/);
                                                                 if (!match) return { half: 0, year: 0 };
@@ -227,10 +227,22 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
             }
         });
 
-        // Filter for 12M moving average keys (case insensitive)
+        // Filter for 12M moving average keys (case insensitive) and sort chronologically
         const movingAvgKeys = Array.from(allHistoryKeys)
             .filter(k => k.toLowerCase().includes('(12m)'))
-            .sort();
+            .sort((a, b) => {
+                // Parse H1.65 (12m) or H2.66 (12m) format
+                const parseKey = (k: string) => {
+                    const match = k.match(/^H([12])\.(\d+)/);
+                    if (!match) return { half: 0, year: 0 };
+                    return { half: parseInt(match[1]), year: parseInt(match[2]) };
+                };
+                const aVal = parseKey(a);
+                const bVal = parseKey(b);
+                // Sort by year ascending, then by half ascending (H1 before H2)
+                if (aVal.year !== bVal.year) return aVal.year - bVal.year;
+                return aVal.half - bVal.half;
+            });
 
         // 2. Prepare Data Grouped by Type
         const typeGroups: Record<string, { movingAvgData: number[], currentSpeed6m: number }> = {};
@@ -315,7 +327,8 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
 
                             {/* X Axis Labels */}
                             {xLabels.map((lbl, i) => {
-                                const x = padding.left + (i / (xLabels.length - 1)) * chartW;
+                                const numLabels = xLabels.length;
+                                const x = padding.left + (numLabels > 1 ? (i / (numLabels - 1)) * chartW : chartW / 2);
                                 return (
                                     <g key={i}>
                                         <text x={x} y={height - padding.bottom + 15} fontSize="9" fill="#6b7280" textAnchor="middle">{lbl}</text>
@@ -326,8 +339,9 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
 
                             {/* Lines & Points */}
                             {currentSeriesData.map((s) => {
+                                const numPoints = xLabels.length;
                                 const pointsStr = s.data.map((val, i) => {
-                                    const x = padding.left + (i / (s.data.length - 1)) * chartW;
+                                    const x = padding.left + (numPoints > 1 ? (i / (numPoints - 1)) * chartW : chartW / 2);
                                     const y = padding.top + (1 - val / maxY) * chartH;
                                     return `${x},${y}`;
                                 }).join(' ');
@@ -343,7 +357,7 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                                             strokeLinejoin="round"
                                         />
                                         {s.data.map((val, i) => {
-                                            const x = padding.left + (i / (s.data.length - 1)) * chartW;
+                                            const x = padding.left + (numPoints > 1 ? (i / (numPoints - 1)) * chartW : chartW / 2);
                                             const y = padding.top + (1 - val / maxY) * chartH;
                                             return (
                                                 <circle

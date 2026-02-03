@@ -118,11 +118,10 @@ export const parseCSV = (file: File): Promise<Project[]> => {
                 history: (() => {
                   const h: Record<string, number> = {};
                   Object.keys(r).forEach(key => {
-                    // Match pattern H2.XX or H2.XX (12m)
-                    // We assume the key starts with H2. followed by digits/dots
+                    // Match pattern H1.XX, H2.XX, H1.XX (12m), H2.XX (12m)
                     // We trim to be safe
                     const cleanKey = key.trim();
-                    if (/^H2\.\d+/.test(cleanKey)) {
+                    if (/^H[12]\.\d+/.test(cleanKey)) {
                       const val = parseFloat(r[key]);
                       if (!isNaN(val)) {
                         h[cleanKey] = val;
