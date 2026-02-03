@@ -78,8 +78,34 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                     </div>
                     <div className="flex items-end justify-between">
                         <div>
-                            <div className="text-2xl font-bold text-indigo-600 leading-none mb-1">{project!.saleSpeed6m}</div>
-                            <div className="text-[10px] text-gray-500 font-medium">Units/mo (6M)</div>
+                            <div className="text-2xl font-bold text-indigo-600 leading-none mb-1">
+                                {(() => {
+                                    // Calculate sum of latest sale speed from all subunits
+                                    let totalSpeed = 0;
+                                    project!.subUnits.forEach(u => {
+                                        if (u.history) {
+                                            const keys = Object.keys(u.history)
+                                                .filter(k => /^H[12]\.\d+/.test(k) && k.toLowerCase().includes('(12m)'))
+                                                .sort((a, b) => {
+                                                    const parseKey = (k: string) => {
+                                                        const match = k.match(/^H([12])\.(\d+)/);
+                                                        if (!match) return { half: 0, year: 0 };
+                                                        return { half: parseInt(match[1]), year: parseInt(match[2]) };
+                                                    };
+                                                    const aVal = parseKey(a);
+                                                    const bVal = parseKey(b);
+                                                    if (bVal.year !== aVal.year) return bVal.year - aVal.year;
+                                                    return bVal.half - aVal.half;
+                                                });
+                                            if (keys.length > 0 && u.history[keys[0]] !== undefined) {
+                                                totalSpeed += u.history[keys[0]];
+                                            }
+                                        }
+                                    });
+                                    return totalSpeed.toFixed(2);
+                                })()}
+                            </div>
+                            <div className="text-[10px] text-gray-500 font-medium">Units/mo</div>
                         </div>
                         <div className="h-8 w-px bg-gray-200 mx-1"></div>
                         <div className="text-right">
