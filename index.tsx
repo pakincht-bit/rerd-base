@@ -7,12 +7,16 @@ if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
+
 import { Analytics } from '@vercel/analytics/react';
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <App />
-    <Analytics />
-  </React.StrictMode>
+<<<<<<< HEAD
+  <Analytics />
+=======
+>>>>>>> b5744c07c0dbdc57a83e3d07ace7e924d25fcbac
+  </React.StrictMode >
 );
