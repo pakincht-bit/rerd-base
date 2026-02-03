@@ -63,7 +63,9 @@ export const parseCSV = (file: File): Promise<Project[]> => {
             const prices: number[] = [];
 
             rows.forEach((r: any) => {
-              const type = getValue(r, ['Type', 'Product Type', 'Unit Type']) || 'Unknown';
+              // Normalize Thai text: trim, NFC normalize, and remove zero-width characters
+              const rawType = getValue(r, ['Type', 'Product Type', 'Unit Type']) || 'Unknown';
+              const type = rawType.trim().normalize('NFC').replace(/[\u200B-\u200D\uFEFF]/g, '');
 
               const usableStr = getValue(r, ['Usable Area (sq.m.)', 'Usable Area', 'Size']);
               const usable = parseFloat(usableStr) || 0;

@@ -45,7 +45,7 @@ const getColor = (type: string, index: number) => {
 
 const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClose, className }) => {
     const [activeTab, setActiveTab] = useState<'overview' | 'trends'>('overview');
-    const [hoveredPoint, setHoveredPoint] = useState<{ x: number, y: number, value: number, label: string, type: string } | null>(null);
+    const [hoveredPoint, setHoveredPoint] = useState<{ x: number, y: number, pointIndex: number, label: string } | null>(null);
 
     // Default positioning if no className provided
     const positionClass = className || "md:left-[450px] left-4";
@@ -195,32 +195,23 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
             }
         });
 
-        // Separate 12M vs Regular keys
-        const periodicKeys = Array.from(allHistoryKeys).filter(k => !k.includes('(12M)') && !k.includes('(12m)')).sort();
-        const movingAvgKeys = Array.from(allHistoryKeys).filter(k => k.includes('(12M)') || k.includes('(12m)')).sort();
+        // Filter for 12M moving average keys (case insensitive)
+        const movingAvgKeys = Array.from(allHistoryKeys)
+            .filter(k => k.toLowerCase().includes('(12m)'))
+            .sort();
 
         // 2. Prepare Data Grouped by Type
-        const typeGroups: Record<string, { periodicData: number[], movingAvgData: number[], currentSpeed: number, currentSpeed6m: number }> = {};
+        const typeGroups: Record<string, { movingAvgData: number[], currentSpeed6m: number }> = {};
 
         project.subUnits.forEach(u => {
             if (!typeGroups[u.type]) {
                 typeGroups[u.type] = {
-                    periodicData: new Array(periodicKeys.length).fill(0),
                     movingAvgData: new Array(movingAvgKeys.length).fill(0),
-                    currentSpeed: 0,
                     currentSpeed6m: 0
                 };
             }
-            // Aggregate speeds
-            typeGroups[u.type].currentSpeed += parseFloat(u.saleSpeed) || 0;
+            // Aggregate 6m speed
             typeGroups[u.type].currentSpeed6m += parseFloat(u.saleSpeed6m) || 0;
-
-            // Aggregate periodic history
-            periodicKeys.forEach((key, idx) => {
-                if (u.history && u.history[key] !== undefined) {
-                    typeGroups[u.type].periodicData[idx] += u.history[key];
-                }
-            });
 
             // Aggregate moving avg history
             movingAvgKeys.forEach((key, idx) => {
@@ -230,38 +221,21 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
             });
         });
 
-        const seriesData1 = Object.keys(typeGroups).map((type, idx) => {
-            const group = typeGroups[type];
-            // Trend 1: History... + [Current Speed (6M)] as the last point? 
-            // The request says "H2.65 - Current". 
-            // In the screenshot, "Current" seems to match the latest 6m value or similar.
-            // Let's perform a merge: [...periodic values, currentSpeed6m]
-            return {
-                type,
-                color: getColor(type, idx),
-                data: [...group.periodicData, group.currentSpeed6m]
-            };
-        });
-
         const seriesData2 = Object.keys(typeGroups).map((type, idx) => {
             const group = typeGroups[type];
-            // Trend 2: 12M History... + [6M Avg]
+            // 12M History only
             return {
                 type,
                 color: getColor(type, idx),
-                data: [...group.movingAvgData, group.currentSpeed6m]
+                data: group.movingAvgData
             };
         });
 
-        // 2. Chart Config
-        const labels1 = [...periodicKeys, 'Current'];
-        const labels2 = [...movingAvgKeys, '6M Avg'];
+        // Chart Config
+        const labels2 = movingAvgKeys;
 
-        // Determine Max Y for scaling (across both charts to keep scale consistent if desired, or separate)
-        const allValues = [
-            ...seriesData1.flatMap(s => s.data),
-            ...seriesData2.flatMap(s => s.data)
-        ];
+        // Determine Max Y for scaling
+        const allValues = seriesData2.flatMap(s => s.data);
         const maxY = Math.max(...allValues, 0.5) * 1.2; // Add 20% headroom
 
         // Chart Dimensions - Increased Width for larger panel
@@ -271,14 +245,13 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
         const chartW = width - padding.left - padding.right;
         const chartH = height - padding.top - padding.bottom;
 
-        const renderChart = (title: string, xLabels: string[], isTrend2: boolean = false) => {
-            const currentSeriesData = isTrend2 ? seriesData2 : seriesData1;
+        const renderChart = (title: string, xLabels: string[]) => {
+            const currentSeriesData = seriesData2;
 
             return (
                 <div className="bg-white/50 p-5 rounded-3xl border border-gray-100 shadow-sm relative backdrop-blur-sm">
                     <div className="flex items-start gap-2 mb-4">
-                        {/* Updated Trend Colors: Trend 1 uses Primary Purple (SCBX), Trend 2 uses Secondary Teal */}
-                        <div className={`w-1 h-5 rounded-full ${isTrend2 ? 'bg-teal-500' : 'bg-scbx'}`}></div>
+                        <div className="w-1 h-5 rounded-full bg-teal-500"></div>
                         <h3 className="text-sm font-bold text-gray-900">{title}</h3>
                     </div>
 
@@ -350,7 +323,7 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                                                     stroke={s.color}
                                                     strokeWidth="2"
                                                     className="cursor-pointer hover:r-6 transition-all duration-200"
-                                                    onMouseEnter={() => setHoveredPoint({ x: x, y: y, value: val, label: xLabels[i], type: s.type })}
+                                                    onMouseEnter={() => setHoveredPoint({ x: x, y: y, pointIndex: i, label: xLabels[i] })}
                                                     onMouseLeave={() => setHoveredPoint(null)}
                                                 />
                                             );
@@ -363,13 +336,21 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                         {/* Custom Tooltip */}
                         {hoveredPoint && (
                             <div
-                                className="absolute z-50 bg-gray-900 text-white text-[10px] rounded px-2 py-1 pointer-events-none shadow-xl transform -translate-x-1/2 -translate-y-full mt-[-8px]"
+                                className="absolute z-50 bg-gray-900 text-white text-[10px] rounded px-2 py-1.5 pointer-events-none shadow-xl transform -translate-x-1/2 -translate-y-full mt-[-8px]"
                                 style={{ left: hoveredPoint.x, top: hoveredPoint.y }}
                             >
-                                <div className="font-bold mb-0.5">{hoveredPoint.label}</div>
-                                <div className="flex items-center gap-1 whitespace-nowrap">
-                                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: TYPE_COLORS[hoveredPoint.type] || '#fff' }}></span>
-                                    <span>{hoveredPoint.type}: {hoveredPoint.value.toFixed(2)}</span>
+                                <div className="font-bold mb-1">{hoveredPoint.label}</div>
+                                <div className="flex flex-col gap-0.5">
+                                    {currentSeriesData.map(s => {
+                                        const val = s.data[hoveredPoint.pointIndex];
+                                        if (val === undefined || val === 0) return null;
+                                        return (
+                                            <div key={s.type} className="flex items-center gap-1 whitespace-nowrap">
+                                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }}></span>
+                                                <span>{s.type}: {val.toFixed(2)}</span>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                                 <div className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-900"></div>
                             </div>
@@ -398,11 +379,10 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                     </h2>
                 </div>
 
-                {renderChart("Trend 1: Period Trends (H2.65 - Current)", labels1)}
-                {renderChart("Trend 2: Moving Average Trends (12M & 6M)", labels2, true)}
+                {renderChart("Moving Average Trends (12M & 6M)", labels2)}
 
                 <div className="text-[10px] text-gray-400 text-center mt-4">
-                    * Data estimated based on project launch averages and current 6-month performance.
+                    * Data based on 12-month moving average and current 6-month performance.
                 </div>
             </div>
         );
