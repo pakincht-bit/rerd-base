@@ -21,16 +21,16 @@ export const parseCSV = (file: File): Promise<Project[]> => {
 
           // Helper to find value by possible keys (case-insensitive & trimmed)
           const getValue = (row: any, possibleKeys: string[]) => {
-             const rowKeys = Object.keys(row);
-             for (const key of possibleKeys) {
-                 // Direct check
-                 if (row[key] !== undefined && row[key] !== '') return row[key];
-                 
-                 // Case-insensitive check
-                 const foundKey = rowKeys.find(k => k.trim().toLowerCase() === key.toLowerCase());
-                 if (foundKey && row[foundKey] !== undefined && row[foundKey] !== '') return row[foundKey];
-             }
-             return null;
+            const rowKeys = Object.keys(row);
+            for (const key of possibleKeys) {
+              // Direct check
+              if (row[key] !== undefined && row[key] !== '') return row[key];
+
+              // Case-insensitive check
+              const foundKey = rowKeys.find(k => k.trim().toLowerCase() === key.toLowerCase());
+              if (foundKey && row[foundKey] !== undefined && row[foundKey] !== '') return row[foundKey];
+            }
+            return null;
           };
 
           // Group by ID
@@ -46,10 +46,10 @@ export const parseCSV = (file: File): Promise<Project[]> => {
           Object.keys(groupedData).forEach(id => {
             const rows = groupedData[id];
             const baseRow = rows[0];
-            
+
             const latStr = getValue(baseRow, ['Latitude', 'lat']);
             const lngStr = getValue(baseRow, ['Longitude', 'lng', 'lon']);
-            
+
             const lat = parseFloat(latStr || '0');
             const lng = parseFloat(lngStr || '0');
 
@@ -64,28 +64,28 @@ export const parseCSV = (file: File): Promise<Project[]> => {
 
             rows.forEach((r: any) => {
               const type = getValue(r, ['Type', 'Product Type', 'Unit Type']) || 'Unknown';
-              
+
               const usableStr = getValue(r, ['Usable Area (sq.m.)', 'Usable Area', 'Size']);
               const usable = parseFloat(usableStr) || 0;
-              
+
               const landStr = getValue(r, ['Land Area (sq.w.)', 'Land Area']);
               const land = parseFloat(landStr) || 0;
-              
+
               const totalStr = getValue(r, ['Total units', 'Total Units', 'Units']);
               const total = parseFloat(totalStr) || 0;
-              
+
               const soldStr = getValue(r, ['Sold Units', 'Sold']);
               const sold = parseFloat(soldStr) || 0;
-              
+
               const priceStr = getValue(r, ['Avg. Price (Units)', 'Price', 'Avg Price', 'Avg. Price']);
               const price = parseFloat(priceStr) || 0;
-              
+
               const speed6mStr = getValue(r, ['Sale Speed (6 เดือน)', 'Sale Speed 6m', 'Speed 6m', 'Sale Speed (6 Months)']);
               const speed6m = parseFloat(speed6mStr) || 0;
-              
+
               const speedStr = getValue(r, ['Sale Speed', 'Speed', 'Total Sale Speed']);
               const speed = parseFloat(speedStr) || 0;
-              
+
               const launchDate = getValue(r, ['Launch date (YY.MM)', 'Launch Date', 'Launch']) || '-';
 
               projTotalUnits += total;
@@ -112,7 +112,23 @@ export const parseCSV = (file: File): Promise<Project[]> => {
                 priceStr: priceDisplay,
                 launchDate,
                 saleSpeed: speed.toFixed(2),
-                saleSpeed6m: speed6m.toFixed(2)
+                saleSpeed6m: speed6m.toFixed(2),
+                history: (() => {
+                  const h: Record<string, number> = {};
+                  Object.keys(r).forEach(key => {
+                    // Match pattern H2.XX or H2.XX (12m)
+                    // We assume the key starts with H2. followed by digits/dots
+                    // We trim to be safe
+                    const cleanKey = key.trim();
+                    if (/^H2\.\d+/.test(cleanKey)) {
+                      const val = parseFloat(r[key]);
+                      if (!isNaN(val)) {
+                        h[cleanKey] = val;
+                      }
+                    }
+                  });
+                  return h;
+                })()
               });
             });
 

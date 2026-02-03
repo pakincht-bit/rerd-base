@@ -10,6 +10,7 @@ export interface SubUnit {
   launchDate: string;
   saleSpeed: string;
   saleSpeed6m: string;
+  history: Record<string, number>; // Stores dynamic period data (e.g., "H2.67": 0.85)
 }
 
 export interface Project {

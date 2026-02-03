@@ -14,19 +14,19 @@ const TYPE_COLORS: Record<string, string> = {
     'Townhouse': '#84CC16', // Green
     'ทาวน์โฮม': '#84CC16',
     'ทาวน์เฮ้าส์': '#84CC16',
-    
+
     'Commercial': '#A855F7', // Purple
     'อาคารพาณิชย์': '#A855F7',
-    
+
     'Condo': '#06B6D4', // Cyan (Complementary)
     'คอนโด': '#06B6D4',
-    
+
     'Single Detached House': '#10B981', // Emerald
     'บ้านเดี่ยว': '#10B981',
-    
+
     'Semi-Detached House': '#F59E0B', // Amber
     'บ้านแฝด': '#F59E0B',
-    
+
     'Land': '#6B7280',
     'ที่ดิน': '#6B7280'
 };
@@ -45,7 +45,7 @@ const getColor = (type: string, index: number) => {
 
 const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClose, className }) => {
     const [activeTab, setActiveTab] = useState<'overview' | 'trends'>('overview');
-    const [hoveredPoint, setHoveredPoint] = useState<{x: number, y: number, value: number, label: string, type: string} | null>(null);
+    const [hoveredPoint, setHoveredPoint] = useState<{ x: number, y: number, value: number, label: string, type: string } | null>(null);
 
     // Default positioning if no className provided
     const positionClass = className || "md:left-[450px] left-4";
@@ -69,7 +69,7 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                         <div className="bg-green-500 h-full rounded-full" style={{ width: `${project!.percentSold}%` }}></div>
                     </div>
                 </div>
-                
+
                 {/* Sale Speed Card */}
                 <div className="bg-white/50 p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between backdrop-blur-sm">
                     <div className="flex items-center gap-2 text-gray-400 mb-1">
@@ -83,8 +83,8 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                         </div>
                         <div className="h-8 w-px bg-gray-200 mx-1"></div>
                         <div className="text-right">
-                             <div className="text-lg font-bold text-gray-600 leading-none mb-1">{project!.saleSpeed}</div>
-                             <div className="text-[10px] text-gray-400 font-medium">All Time</div>
+                            <div className="text-lg font-bold text-gray-600 leading-none mb-1">{project!.saleSpeed}</div>
+                            <div className="text-[10px] text-gray-400 font-medium">All Time</div>
                         </div>
                     </div>
                 </div>
@@ -104,10 +104,10 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                                     <th className="px-3 py-3 text-left">Type</th>
                                     <th className="px-2 py-3 text-center">Launch</th>
                                     <th className="px-3 py-3 text-right border-r border-gray-200/50">Price</th>
-                                    
+
                                     <th className="px-2 py-3 text-right">Area</th>
                                     <th className="px-2 py-3 text-right border-r border-gray-200/50">Land</th>
-                                    
+
                                     <th className="px-2 py-3 text-right">Spd 6m</th>
                                     <th className="px-2 py-3 text-right">Speed</th>
                                     <th className="px-2 py-3 text-right">Sold %</th>
@@ -121,11 +121,11 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                                         <td className="px-2 py-2.5 text-center text-gray-500 font-mono">{u.launchDate}</td>
                                         {/* Updated font-bold to font-medium */}
                                         <td className="px-3 py-2.5 text-right text-gray-800 font-medium font-mono border-r border-gray-100">{u.priceStr}</td>
-                                        
+
                                         {/* Group 2: Size */}
                                         <td className="px-2 py-2.5 text-right text-gray-600 font-mono">{u.usableArea}</td>
                                         <td className="px-2 py-2.5 text-right text-gray-600 font-mono border-r border-gray-100">{u.landArea}</td>
-                                        
+
                                         {/* Group 3: Sales */}
                                         <td className="px-2 py-2.5 text-right text-gray-600 font-mono">{u.saleSpeed6m}</td>
                                         <td className="px-2 py-2.5 text-right text-gray-600 font-mono">{u.saleSpeed}</td>
@@ -150,11 +150,11 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                 </h3>
                 <div className="bg-white/50 rounded-2xl border border-gray-100 p-5 shadow-sm backdrop-blur-sm">
                     <div className="grid grid-cols-[100px_1fr] gap-y-3 text-sm items-center">
-                        
+
                         <div className="text-gray-500 font-medium">Price Range</div>
                         {/* Updated font-bold to font-medium */}
                         <div className="font-medium text-gray-800">{project!.priceRange}</div>
-                        
+
                         <div className="h-px bg-gray-100 col-span-2 my-1"></div>
 
                         <div className="text-gray-500 font-medium">Launch Date</div>
@@ -187,37 +187,81 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
     const renderTrends = () => {
         if (!project) return null;
 
-        // 1. Prepare Data Grouped by Type
-        const typeGroups: Record<string, { speed: number, speed6m: number }> = {};
-        
+        // 1. Extract All Period Keys from all SubUnits
+        const allHistoryKeys = new Set<string>();
         project.subUnits.forEach(u => {
-            if (!typeGroups[u.type]) {
-                typeGroups[u.type] = { speed: 0, speed6m: 0 };
+            if (u.history) {
+                Object.keys(u.history).forEach(k => allHistoryKeys.add(k));
             }
-            // Aggregate speeds (assuming speeds are additive if multiple unit sizes exist for same type)
-            typeGroups[u.type].speed += parseFloat(u.saleSpeed) || 0;
-            typeGroups[u.type].speed6m += parseFloat(u.saleSpeed6m) || 0;
         });
 
-        const seriesData = Object.keys(typeGroups).map((type, idx) => {
-            const histSpeed = typeGroups[type].speed; // Historical/Avg
-            const currSpeed = typeGroups[type].speed6m; // Current 6M
-            
-            // Construct Data Points for H2.65, H2.66, H2.67, Current
-            // Logic: Past periods use 'histSpeed', Current uses 'currSpeed'
+        // Separate 12M vs Regular keys
+        const periodicKeys = Array.from(allHistoryKeys).filter(k => !k.includes('(12M)') && !k.includes('(12m)')).sort();
+        const movingAvgKeys = Array.from(allHistoryKeys).filter(k => k.includes('(12M)') || k.includes('(12m)')).sort();
+
+        // 2. Prepare Data Grouped by Type
+        const typeGroups: Record<string, { periodicData: number[], movingAvgData: number[], currentSpeed: number, currentSpeed6m: number }> = {};
+
+        project.subUnits.forEach(u => {
+            if (!typeGroups[u.type]) {
+                typeGroups[u.type] = {
+                    periodicData: new Array(periodicKeys.length).fill(0),
+                    movingAvgData: new Array(movingAvgKeys.length).fill(0),
+                    currentSpeed: 0,
+                    currentSpeed6m: 0
+                };
+            }
+            // Aggregate speeds
+            typeGroups[u.type].currentSpeed += parseFloat(u.saleSpeed) || 0;
+            typeGroups[u.type].currentSpeed6m += parseFloat(u.saleSpeed6m) || 0;
+
+            // Aggregate periodic history
+            periodicKeys.forEach((key, idx) => {
+                if (u.history && u.history[key] !== undefined) {
+                    typeGroups[u.type].periodicData[idx] += u.history[key];
+                }
+            });
+
+            // Aggregate moving avg history
+            movingAvgKeys.forEach((key, idx) => {
+                if (u.history && u.history[key] !== undefined) {
+                    typeGroups[u.type].movingAvgData[idx] += u.history[key];
+                }
+            });
+        });
+
+        const seriesData1 = Object.keys(typeGroups).map((type, idx) => {
+            const group = typeGroups[type];
+            // Trend 1: History... + [Current Speed (6M)] as the last point? 
+            // The request says "H2.65 - Current". 
+            // In the screenshot, "Current" seems to match the latest 6m value or similar.
+            // Let's perform a merge: [...periodic values, currentSpeed6m]
             return {
                 type,
                 color: getColor(type, idx),
-                data: [histSpeed, histSpeed, histSpeed, currSpeed] // [H2.65, H2.66, H2.67, Current]
+                data: [...group.periodicData, group.currentSpeed6m]
+            };
+        });
+
+        const seriesData2 = Object.keys(typeGroups).map((type, idx) => {
+            const group = typeGroups[type];
+            // Trend 2: 12M History... + [6M Avg]
+            return {
+                type,
+                color: getColor(type, idx),
+                data: [...group.movingAvgData, group.currentSpeed6m]
             };
         });
 
         // 2. Chart Config
-        const labels1 = ['H2.65', 'H2.66', 'H2.67', 'Current'];
-        const labels2 = ['H2.65 (12M)', 'H2.66 (12M)', 'H2.67 (12M)', '6M Avg'];
+        const labels1 = [...periodicKeys, 'Current'];
+        const labels2 = [...movingAvgKeys, '6M Avg'];
 
-        // Determine Max Y for scaling
-        const allValues = seriesData.flatMap(s => s.data);
+        // Determine Max Y for scaling (across both charts to keep scale consistent if desired, or separate)
+        const allValues = [
+            ...seriesData1.flatMap(s => s.data),
+            ...seriesData2.flatMap(s => s.data)
+        ];
         const maxY = Math.max(...allValues, 0.5) * 1.2; // Add 20% headroom
 
         // Chart Dimensions - Increased Width for larger panel
@@ -227,120 +271,124 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
         const chartW = width - padding.left - padding.right;
         const chartH = height - padding.top - padding.bottom;
 
-        const renderChart = (title: string, xLabels: string[], isTrend2: boolean = false) => (
-            <div className="bg-white/50 p-5 rounded-3xl border border-gray-100 shadow-sm relative backdrop-blur-sm">
-                <div className="flex items-start gap-2 mb-4">
-                    {/* Updated Trend Colors: Trend 1 uses Primary Purple (SCBX), Trend 2 uses Secondary Teal */}
-                    <div className={`w-1 h-5 rounded-full ${isTrend2 ? 'bg-teal-500' : 'bg-scbx'}`}></div>
-                    <h3 className="text-sm font-bold text-gray-900">{title}</h3>
-                </div>
-                
-                <div className="relative">
-                    <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible font-sans">
-                        {/* Grid Lines (Y-Axis) */}
-                        {[0, 0.33, 0.66, 1].map(ratio => {
-                            const y = padding.top + chartH * ratio;
-                            const val = maxY * (1 - ratio);
-                            return (
-                                <g key={ratio}>
-                                    <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#f3f4f6" strokeWidth="1" />
-                                    <text x={padding.left - 8} y={y + 3} fontSize="9" fill="#9ca3af" textAnchor="end">{val.toFixed(1)}</text>
-                                </g>
-                            );
-                        })}
-                        {/* Y Axis Label */}
-                         <text 
-                            x={10} 
-                            y={height/2} 
-                            transform={`rotate(-90, 10, ${height/2})`} 
-                            fontSize="9" 
-                            fill="#6b7280" 
-                            textAnchor="middle" 
-                            fontWeight="bold"
-                        >
-                            Sale Speed (Units/Month)
-                        </text>
+        const renderChart = (title: string, xLabels: string[], isTrend2: boolean = false) => {
+            const currentSeriesData = isTrend2 ? seriesData2 : seriesData1;
 
-                        {/* X Axis Labels */}
-                        {xLabels.map((lbl, i) => {
-                            const x = padding.left + (i / (xLabels.length - 1)) * chartW;
-                            return (
-                                <g key={i}>
-                                    <text x={x} y={height - padding.bottom + 15} fontSize="9" fill="#6b7280" textAnchor="middle">{lbl}</text>
-                                    <line x1={x} y1={height-padding.bottom} x2={x} y2={height-padding.bottom+5} stroke="#e5e7eb" strokeWidth="1" />
-                                </g>
-                            );
-                        })}
+            return (
+                <div className="bg-white/50 p-5 rounded-3xl border border-gray-100 shadow-sm relative backdrop-blur-sm">
+                    <div className="flex items-start gap-2 mb-4">
+                        {/* Updated Trend Colors: Trend 1 uses Primary Purple (SCBX), Trend 2 uses Secondary Teal */}
+                        <div className={`w-1 h-5 rounded-full ${isTrend2 ? 'bg-teal-500' : 'bg-scbx'}`}></div>
+                        <h3 className="text-sm font-bold text-gray-900">{title}</h3>
+                    </div>
 
-                        {/* Lines & Points */}
-                        {seriesData.map((s, seriesIdx) => {
-                            const pointsStr = s.data.map((val, i) => {
-                                const x = padding.left + (i / (s.data.length - 1)) * chartW;
-                                const y = padding.top + (1 - val / maxY) * chartH;
-                                return `${x},${y}`;
-                            }).join(' ');
+                    <div className="relative">
+                        <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible font-sans">
+                            {/* Grid Lines (Y-Axis) */}
+                            {[0, 0.33, 0.66, 1].map(ratio => {
+                                const y = padding.top + chartH * ratio;
+                                const val = maxY * (1 - ratio);
+                                return (
+                                    <g key={ratio}>
+                                        <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#f3f4f6" strokeWidth="1" />
+                                        <text x={padding.left - 8} y={y + 3} fontSize="9" fill="#9ca3af" textAnchor="end">{val.toFixed(1)}</text>
+                                    </g>
+                                );
+                            })}
+                            {/* Y Axis Label */}
+                            <text
+                                x={10}
+                                y={height / 2}
+                                transform={`rotate(-90, 10, ${height / 2})`}
+                                fontSize="9"
+                                fill="#6b7280"
+                                textAnchor="middle"
+                                fontWeight="bold"
+                            >
+                                Sale Speed (Units/Month)
+                            </text>
 
-                            return (
-                                <g key={s.type}>
-                                    <polyline 
-                                        points={pointsStr} 
-                                        fill="none" 
-                                        stroke={s.color} 
-                                        strokeWidth="2" 
-                                        strokeLinecap="round" 
-                                        strokeLinejoin="round" 
-                                    />
-                                    {s.data.map((val, i) => {
-                                        const x = padding.left + (i / (s.data.length - 1)) * chartW;
-                                        const y = padding.top + (1 - val / maxY) * chartH;
-                                        return (
-                                            <circle 
-                                                key={i} 
-                                                cx={x} 
-                                                cy={y} 
-                                                r="4" 
-                                                fill="white" 
-                                                stroke={s.color} 
-                                                strokeWidth="2"
-                                                className="cursor-pointer hover:r-6 transition-all duration-200"
-                                                onMouseEnter={() => setHoveredPoint({ x: x, y: y, value: val, label: xLabels[i], type: s.type })}
-                                                onMouseLeave={() => setHoveredPoint(null)}
-                                            />
-                                        );
-                                    })}
-                                </g>
-                            );
-                        })}
-                    </svg>
+                            {/* X Axis Labels */}
+                            {xLabels.map((lbl, i) => {
+                                const x = padding.left + (i / (xLabels.length - 1)) * chartW;
+                                return (
+                                    <g key={i}>
+                                        <text x={x} y={height - padding.bottom + 15} fontSize="9" fill="#6b7280" textAnchor="middle">{lbl}</text>
+                                        <line x1={x} y1={height - padding.bottom} x2={x} y2={height - padding.bottom + 5} stroke="#e5e7eb" strokeWidth="1" />
+                                    </g>
+                                );
+                            })}
 
-                    {/* Custom Tooltip */}
-                    {hoveredPoint && (
-                        <div 
-                            className="absolute z-50 bg-gray-900 text-white text-[10px] rounded px-2 py-1 pointer-events-none shadow-xl transform -translate-x-1/2 -translate-y-full mt-[-8px]"
-                            style={{ left: hoveredPoint.x, top: hoveredPoint.y }}
-                        >
-                            <div className="font-bold mb-0.5">{hoveredPoint.label}</div>
-                            <div className="flex items-center gap-1 whitespace-nowrap">
-                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: TYPE_COLORS[hoveredPoint.type] || '#fff' }}></span>
-                                <span>{hoveredPoint.type}: {hoveredPoint.value.toFixed(2)}</span>
+                            {/* Lines & Points */}
+                            {currentSeriesData.map((s) => {
+                                const pointsStr = s.data.map((val, i) => {
+                                    const x = padding.left + (i / (s.data.length - 1)) * chartW;
+                                    const y = padding.top + (1 - val / maxY) * chartH;
+                                    return `${x},${y}`;
+                                }).join(' ');
+
+                                return (
+                                    <g key={s.type}>
+                                        <polyline
+                                            points={pointsStr}
+                                            fill="none"
+                                            stroke={s.color}
+                                            strokeWidth="2"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        />
+                                        {s.data.map((val, i) => {
+                                            const x = padding.left + (i / (s.data.length - 1)) * chartW;
+                                            const y = padding.top + (1 - val / maxY) * chartH;
+                                            return (
+                                                <circle
+                                                    key={i}
+                                                    cx={x}
+                                                    cy={y}
+                                                    r="4"
+                                                    fill="white"
+                                                    stroke={s.color}
+                                                    strokeWidth="2"
+                                                    className="cursor-pointer hover:r-6 transition-all duration-200"
+                                                    onMouseEnter={() => setHoveredPoint({ x: x, y: y, value: val, label: xLabels[i], type: s.type })}
+                                                    onMouseLeave={() => setHoveredPoint(null)}
+                                                />
+                                            );
+                                        })}
+                                    </g>
+                                );
+                            })}
+                        </svg>
+
+                        {/* Custom Tooltip */}
+                        {hoveredPoint && (
+                            <div
+                                className="absolute z-50 bg-gray-900 text-white text-[10px] rounded px-2 py-1 pointer-events-none shadow-xl transform -translate-x-1/2 -translate-y-full mt-[-8px]"
+                                style={{ left: hoveredPoint.x, top: hoveredPoint.y }}
+                            >
+                                <div className="font-bold mb-0.5">{hoveredPoint.label}</div>
+                                <div className="flex items-center gap-1 whitespace-nowrap">
+                                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: TYPE_COLORS[hoveredPoint.type] || '#fff' }}></span>
+                                    <span>{hoveredPoint.type}: {hoveredPoint.value.toFixed(2)}</span>
+                                </div>
+                                <div className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-900"></div>
                             </div>
-                            <div className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-900"></div>
-                        </div>
-                    )}
-                </div>
+                        )}
+                    </div>
 
-                {/* Legend */}
-                <div className="flex flex-wrap justify-center gap-3 mt-2 border-t border-gray-100 pt-3">
-                    {seriesData.map(s => (
-                        <div key={s.type} className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-md border border-gray-100">
-                             <div className="w-3 h-1 rounded-full" style={{ backgroundColor: s.color }}></div>
-                             <div className="w-2 h-2 rounded-full border border-white shadow-sm -ml-2" style={{ backgroundColor: s.color }}></div>
-                             <span className="text-[10px] font-bold text-gray-600">{s.type}</span>
-                        </div>
-                    ))}
+                    {/* Legend */}
+                    <div className="flex flex-wrap justify-center gap-3 mt-2 border-t border-gray-100 pt-3">
+                        {currentSeriesData.map(s => (
+                            <div key={s.type} className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-md border border-gray-100">
+                                <div className="w-3 h-1 rounded-full" style={{ backgroundColor: s.color }}></div>
+                                <div className="w-2 h-2 rounded-full border border-white shadow-sm -ml-2" style={{ backgroundColor: s.color }}></div>
+                                <span className="text-[10px] font-bold text-gray-600">{s.type}</span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
-            </div>
-        );
+            );
+        };
 
         return (
             <div className="space-y-6 animate-fadeInUp pb-10">
@@ -349,10 +397,10 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                         <TrendingUp className="w-5 h-5 text-scbx" /> Sale Speed Trend Analysis
                     </h2>
                 </div>
-                
+
                 {renderChart("Trend 1: Period Trends (H2.65 - Current)", labels1)}
                 {renderChart("Trend 2: Moving Average Trends (12M & 6M)", labels2, true)}
-                
+
                 <div className="text-[10px] text-gray-400 text-center mt-4">
                     * Data estimated based on project launch averages and current 6-month performance.
                 </div>
@@ -361,7 +409,7 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
     };
 
     return (
-        <div 
+        <div
             className={`
                 absolute top-24 bottom-4 z-30
                 ${positionClass}
@@ -380,7 +428,7 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                             <div className="flex-1 min-w-0 pr-4">
                                 <h2 className="text-xl font-bold text-gray-900 leading-tight truncate">{project.name}</h2>
                             </div>
-                            <button 
+                            <button
                                 onClick={onClose}
                                 className="p-2 rounded-full hover:bg-gray-100/80 text-gray-500 hover:text-gray-900 transition-colors shrink-0 -mt-2 -mr-2"
                             >
@@ -390,22 +438,20 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
 
                         {/* Tabs Row */}
                         <div className="px-6 flex gap-6">
-                            <button 
+                            <button
                                 onClick={() => setActiveTab('overview')}
-                                className={`flex items-center gap-2 pb-3 text-sm font-bold transition-all relative ${
-                                    activeTab === 'overview' ? 'text-scbx' : 'text-gray-400 hover:text-gray-600'
-                                }`}
+                                className={`flex items-center gap-2 pb-3 text-sm font-bold transition-all relative ${activeTab === 'overview' ? 'text-scbx' : 'text-gray-400 hover:text-gray-600'
+                                    }`}
                             >
                                 <LayoutDashboard className="w-4 h-4" /> Overview
                                 {activeTab === 'overview' && (
                                     <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-scbx rounded-t-full animate-fadeInUp"></div>
                                 )}
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setActiveTab('trends')}
-                                className={`flex items-center gap-2 pb-3 text-sm font-bold transition-all relative ${
-                                    activeTab === 'trends' ? 'text-scbx' : 'text-gray-400 hover:text-gray-600'
-                                }`}
+                                className={`flex items-center gap-2 pb-3 text-sm font-bold transition-all relative ${activeTab === 'trends' ? 'text-scbx' : 'text-gray-400 hover:text-gray-600'
+                                    }`}
                             >
                                 <TrendingUp className="w-4 h-4" /> Sale Speed Trend
                                 {activeTab === 'trends' && (
