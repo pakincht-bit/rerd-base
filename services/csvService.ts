@@ -83,12 +83,47 @@ export const parseCSV = (file: File): Promise<Project[]> => {
               const price = parseFloat(priceStr) || 0;
 
               const speed6mStr = getValue(r, ['Sale Speed (6 เดือน)', 'Sale Speed 6m', 'Speed 6m', 'Sale Speed (6 Months)']);
-              const speed6m = parseFloat(speed6mStr) || 0;
+              let speed6m = parseFloat(speed6mStr) || 0;
 
               const speedStr = getValue(r, ['Sale Speed', 'Speed', 'Total Sale Speed']);
               const speed = parseFloat(speedStr) || 0;
 
               const launchDate = getValue(r, ['Launch date (YY.MM)', 'Launch Date', 'Launch']) || '-';
+
+              // Extract history and also try to find latest speed if speed6m is 0
+              const history: Record<string, number> = {};
+              Object.keys(r).forEach(key => {
+                const cleanKey = key.trim();
+                if (/^H[12]\.\d+/.test(cleanKey)) {
+                  const val = parseFloat(r[key]);
+                  if (!isNaN(val)) {
+                    history[cleanKey] = val;
+                  }
+                }
+              });
+
+              // If speed6m is 0, try to get it from the latest history key (favoring (12m) keys)
+              if (speed6m === 0 && Object.keys(history).length > 0) {
+                const hKeys = Object.keys(history).sort((a, b) => {
+                  const parseKey = (k: string) => {
+                    const m = k.match(/^H([12])\.(\d+)/);
+                    if (!m) return { half: 0, year: 0, is12m: false };
+                    return {
+                      half: parseInt(m[1]),
+                      year: parseInt(m[2]),
+                      is12m: k.toLowerCase().includes('(12m)')
+                    };
+                  };
+                  const aV = parseKey(a);
+                  const bV = parseKey(b);
+                  if (aV.is12m !== bV.is12m) return bV.is12m ? 1 : -1; // Prefer (12m)
+                  if (aV.year !== bV.year) return bV.year - aV.year;
+                  return bV.half - aV.half;
+                });
+                if (hKeys.length > 0) {
+                  speed6m = history[hKeys[0]];
+                }
+              }
 
               projTotalUnits += total;
               projSoldUnits += sold;
@@ -115,21 +150,7 @@ export const parseCSV = (file: File): Promise<Project[]> => {
                 launchDate,
                 saleSpeed: speed.toFixed(2),
                 saleSpeed6m: speed6m.toFixed(2),
-                history: (() => {
-                  const h: Record<string, number> = {};
-                  Object.keys(r).forEach(key => {
-                    // Match pattern H1.XX, H2.XX, H1.XX (12m), H2.XX (12m)
-                    // We trim to be safe
-                    const cleanKey = key.trim();
-                    if (/^H[12]\.\d+/.test(cleanKey)) {
-                      const val = parseFloat(r[key]);
-                      if (!isNaN(val)) {
-                        h[cleanKey] = val;
-                      }
-                    }
-                  });
-                  return h;
-                })()
+                history
               });
             });
 

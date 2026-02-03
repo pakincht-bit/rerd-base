@@ -20,9 +20,9 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
     const R = 6371; // Radius of the earth in km
     const dLat = (lat2 - lat1) * (Math.PI / 180);
     const dLon = (lon2 - lon1) * (Math.PI / 180);
-    const a = 
+    const a =
         Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
         Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
@@ -36,7 +36,7 @@ const OVERPASS_SERVERS = [
     'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
 ];
 
-const ResultsPanel: React.FC<ResultsPanelProps> = ({ 
+const ResultsPanel: React.FC<ResultsPanelProps> = ({
     projects,
     totalCount,
     searchState,
@@ -49,7 +49,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
 }) => {
     const [activeTab, setActiveTab] = useState<'projects' | 'mall' | 'hospital' | 'school'>('projects');
     const [placeSortBy, setPlaceSortBy] = useState<'distance' | 'rating'>('distance');
-    
+
     // Data State
     const [placesData, setPlacesData] = useState<Record<string, NearbyPlace[]>>({
         mall: [],
@@ -58,9 +58,9 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
     });
     const [isLoading, setIsLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
-    
+
     // Cache to prevent refetching same location
-    const lastFetchRef = useRef<{lat: number, lng: number, radius: number} | null>(null);
+    const lastFetchRef = useRef<{ lat: number, lng: number, radius: number } | null>(null);
 
     // Auto-scroll to selected project when selection changes
     useEffect(() => {
@@ -75,16 +75,16 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
     // Fetch OSM Data (Loads ALL categories at once when location changes)
     useEffect(() => {
         let isMounted = true;
-        
+
         // Debounce execution to avoid rate limits when sliding or typing quickly
         const timeoutId = setTimeout(() => {
             const fetchAllPlaces = async () => {
                 const { lat, lng, radius } = searchState;
 
                 // Check if we need to fetch (only if location/radius changed)
-                if (lastFetchRef.current && 
-                    lastFetchRef.current.lat === lat && 
-                    lastFetchRef.current.lng === lng && 
+                if (lastFetchRef.current &&
+                    lastFetchRef.current.lat === lat &&
+                    lastFetchRef.current.lng === lng &&
                     lastFetchRef.current.radius === radius) {
                     return;
                 }
@@ -92,13 +92,13 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                 setIsLoading(true);
                 setErrorMsg(null);
                 setPlacesData({ mall: [], hospital: [], school: [] }); // Clear previous data
-                
+
                 // Notify parent to clear map markers temporarily
                 if (onPlacesFetched) onPlacesFetched([]);
 
                 try {
                     const radiusMeters = radius * 1000;
-                    
+
                     // Combined Query for Malls, Hospitals, and Schools
                     const query = `
                         [out:json][timeout:25];
@@ -184,14 +184,14 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
 
                             const pLat = el.lat || el.center?.lat;
                             const pLng = el.lon || el.center?.lon;
-                            
-                            if(!pLat || !pLng) return;
+
+                            if (!pLat || !pLng) return;
 
                             const dist = calculateDistance(lat, lng, pLat, pLng);
 
                             // Determine Type
                             let type: 'mall' | 'hospital' | 'school' | null = null;
-                            
+
                             // Priority check
                             if (tags.shop && MALL_REGEX.test(tags.shop)) type = 'mall';
                             else if (tags.amenity && HOSPITAL_REGEX.test(tags.amenity)) type = 'hospital';
@@ -204,7 +204,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                             // 1. Malls: Exclude convenience stores AND Markets
                             if (type === 'mall') {
                                 const excludeMalls = [
-                                    '7-eleven', '7-11', 'family', 'lawson', 'mini big c', 
+                                    '7-eleven', '7-11', 'family', 'lawson', 'mini big c',
                                     'lotus\'s go fresh', 'cj', 'tops daily', 'seven eleven', 'jiffy',
                                     'market', 'ตลาด', 'bazaar', 'night market', 'walking street', 'floating market',
                                     'shop', 'store' // Generic names
@@ -214,14 +214,14 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
 
                             // 2. Hospitals: Exclude Animal Hospitals and Clinics
                             if (type === 'hospital') {
-                                 const excludeHospital = ['animal', 'pet', 'dental', 'clinic', 'คลินิก', 'รักษาสัตว์', 'ทำฟัน', 'ทันตกรรม'];
-                                 if (excludeHospital.some(ex => nameLower.includes(ex))) return;
+                                const excludeHospital = ['animal', 'pet', 'dental', 'clinic', 'คลินิก', 'รักษาสัตว์', 'ทำฟัน', 'ทันตกรรม'];
+                                if (excludeHospital.some(ex => nameLower.includes(ex))) return;
                             }
 
                             // 3. Schools: Exclude specialized schools (Driving, Music, etc.)
                             if (type === 'school') {
                                 const excludeSchools = [
-                                    'driving', 'music', 'tutor', 'language', 'dance', 
+                                    'driving', 'music', 'tutor', 'language', 'dance',
                                     'nursery', 'day care', 'gym', 'swim', 'ballet', 'yoga', 'cooking', 'art', 'football', 'soccer', 'tennis', 'badminton', 'taekwondo', 'muay thai',
                                     'บริบาล', 'กวดวิชา', 'สอนขับรถ', 'ดนตรี', 'ภาษา', 'เต้น', 'ว่ายน้ำ', 'ยิม', 'รับเลี้ยงเด็ก', 'เนอสเซอรี่'
                                 ];
@@ -251,7 +251,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
 
                     setPlacesData(newPlaces);
                     lastFetchRef.current = { lat, lng, radius };
-                    
+
                     // Lift state up to App component for the Map
                     if (onPlacesFetched) {
                         onPlacesFetched(allPlacesFlat);
@@ -261,10 +261,10 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                     console.error("Error fetching OSM data:", error);
                     setErrorMsg("Failed to load nearby places. High traffic.");
                 } finally {
-                    if(isMounted) setIsLoading(false);
+                    if (isMounted) setIsLoading(false);
                 }
             };
-            
+
             fetchAllPlaces();
         }, 1000); // 1 second debounce to prevent spamming while moving map
 
@@ -277,7 +277,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
     // Sorting Logic for Nearby Places
     const sortedPlaces = useMemo(() => {
         if (activeTab === 'projects') return [];
-        
+
         const items = placesData[activeTab] || [];
         return [...items].sort((a, b) => {
             if (placeSortBy === 'rating') {
@@ -296,38 +296,36 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
 
     return (
         <div className="w-full h-full flex flex-col bg-transparent">
-             {/* Header */}
-             <div className="border-b border-gray-100/50 bg-white/60 backdrop-blur-md sticky top-0 z-20 flex flex-col rounded-t-3xl shadow-sm">
-                
+            {/* Header */}
+            <div className="border-b border-gray-100/50 bg-white/60 backdrop-blur-md sticky top-0 z-20 flex flex-col rounded-t-3xl shadow-sm">
+
                 {/* Tab Navigation */}
                 <div className="flex items-center px-2 pt-2">
                     {tabs.map(tab => {
-                         const isTabLoading = isLoading && tab.id !== 'projects';
-                         return (
+                        const isTabLoading = isLoading && tab.id !== 'projects';
+                        return (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id as any)}
-                                className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 relative transition-all duration-300 ${
-                                    activeTab === tab.id ? 'text-scbx' : 'text-gray-400 hover:text-gray-600'
-                                }`}
+                                className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 relative transition-all duration-300 ${activeTab === tab.id ? 'text-scbx' : 'text-gray-400 hover:text-gray-600'
+                                    }`}
                             >
                                 <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? 'stroke-[2.5px]' : 'stroke-2'}`} />
                                 <span className="text-[10px] font-bold uppercase tracking-wide">{tab.label}</span>
-                                
+
                                 {/* Active Indicator */}
                                 {activeTab === tab.id && (
                                     <div className="absolute bottom-0 w-8 h-1 bg-scbx rounded-t-full"></div>
                                 )}
-                                
+
                                 {/* Badge */}
-                                <span className={`absolute top-2 right-2 min-w-[16px] h-4 px-1 rounded-full text-[9px] flex items-center justify-center font-bold transition-all ${
-                                    activeTab === tab.id ? 'bg-scbx text-white' : 'bg-gray-200 text-gray-500'
-                                } ${isTabLoading ? 'bg-gray-100' : ''}`}>
+                                <span className={`absolute top-2 right-2 min-w-[16px] h-4 px-1 rounded-full text-[9px] flex items-center justify-center font-bold transition-all ${activeTab === tab.id ? 'bg-scbx text-white' : 'bg-gray-200 text-gray-500'
+                                    } ${isTabLoading ? 'bg-gray-100' : ''}`}>
                                     {isTabLoading ? (
                                         <Loader2 className="w-2.5 h-2.5 animate-spin text-gray-400" />
                                     ) : (
-                                        tab.id === 'projects' 
-                                            ? (tab.count > 99 ? '99+' : tab.count) 
+                                        tab.id === 'projects'
+                                            ? (tab.count > 99 ? '99+' : tab.count)
                                             : (tab.count > 30 ? '30+' : tab.count)
                                     )}
                                 </span>
@@ -349,7 +347,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
 
                     <div className="relative group w-auto min-w-[140px]">
                         {activeTab === 'projects' ? (
-                            <select 
+                            <select
                                 value={searchState.sortBy}
                                 onChange={(e) => setSearchState(prev => ({ ...prev, sortBy: e.target.value as any }))}
                                 className="w-full appearance-none pl-3 pr-8 h-8 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-black/5 hover:bg-gray-50 hover:border-gray-300 transition shadow-sm cursor-pointer"
@@ -363,7 +361,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                 <option value="priceDesc">Sort: Price (High)</option>
                             </select>
                         ) : (
-                            <select 
+                            <select
                                 value={placeSortBy}
                                 onChange={(e) => setPlaceSortBy(e.target.value as 'distance' | 'rating')}
                                 className="w-full appearance-none pl-3 pr-8 h-8 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-black/5 hover:bg-gray-50 hover:border-gray-300 transition shadow-sm cursor-pointer"
@@ -379,10 +377,10 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
 
             {/* Content List */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
-                 
-                 {/* PROJECTS TAB */}
-                 {activeTab === 'projects' && (
-                     <div className="grid grid-cols-1 gap-3 animate-fadeInUp">
+
+                {/* PROJECTS TAB */}
+                {activeTab === 'projects' && (
+                    <div className="grid grid-cols-1 gap-3 animate-fadeInUp">
                         {projects.map((p, idx) => {
                             const isSelected = selectedProjectId === p.projectId;
                             const uniqueTypes = [...new Set(p.subUnits.map(u => u.type))];
@@ -396,11 +394,11 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                 const relevantPrices = p.subUnits
                                     .filter(u => u.type === selectedType && u.price > 0)
                                     .map(u => u.price);
-                                
+
                                 if (relevantPrices.length > 0) {
                                     const minPrice = Math.min(...relevantPrices);
                                     const maxPrice = Math.max(...relevantPrices);
-                                    
+
                                     const minVal = minPrice < 1000 ? minPrice : minPrice / 1000000;
                                     const maxVal = maxPrice < 1000 ? maxPrice : maxPrice / 1000000;
 
@@ -413,15 +411,15 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                             }
 
                             return (
-                                <div 
+                                <div
                                     id={`project-card-${p.projectId}`}
                                     key={p.projectId}
                                     onClick={() => onProjectClick(p)}
                                     onMouseEnter={() => onProjectHover && onProjectHover(p.projectId)}
                                     onMouseLeave={() => onProjectHover && onProjectHover(null)}
                                     className={`group relative flex items-start gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-200 backdrop-blur-sm
-                                        ${isSelected 
-                                            ? 'bg-white shadow-lg scale-[1.01] border-l-4 border-scbx ring-1 ring-gray-100' 
+                                        ${isSelected
+                                            ? 'bg-white shadow-lg scale-[1.01] border-l-4 border-scbx ring-1 ring-gray-100'
                                             : 'bg-white/60 border border-white/50 hover:bg-white hover:scale-[1.01] hover:shadow-lg'
                                         }
                                     `}
@@ -444,7 +442,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                             </h3>
                                             <div className="text-[10px] text-gray-500 truncate mt-0.5">{p.developer}</div>
                                         </div>
-                                        
+
                                         {/* Types Row */}
                                         <div className="flex items-center gap-1.5 overflow-hidden mt-0.5">
                                             {uniqueTypes.slice(0, 3).map(t => (
@@ -464,7 +462,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                             <div className="flex items-center gap-0.5 text-[9px] text-green-700 bg-green-50/50 px-1.5 py-0.5 rounded border border-green-100/50">
                                                 <CheckCircle2 size={8} /> {Math.round(parseFloat(p.percentSold))}% ({unitLeft.toLocaleString()} Left)
                                             </div>
-                                            <div className="flex items-center gap-0.5 text-[9px] text-indigo-600 bg-indigo-50/50 px-1.5 py-0.5 rounded border border-indigo-100/50">
+                                            <div className="flex items-center gap-0.5 text-[9px] text-indigo-600 bg-indigo-50/50 px-1.5 py-0.5 rounded border border-indigo-100/50" title="Latest Sale Speed">
                                                 <TrendingUp size={8} /> {p.saleSpeed6m}
                                             </div>
                                         </div>
@@ -484,7 +482,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                             );
                         })}
                         {projects.length === 0 && (
-                             <div className="flex flex-col items-center justify-center py-20 text-center">
+                            <div className="flex flex-col items-center justify-center py-20 text-center">
                                 <div className="bg-white/40 p-5 rounded-full mb-4 border border-white/50 shadow-sm">
                                     <SearchX className="w-8 h-8 text-gray-400" />
                                 </div>
@@ -492,76 +490,75 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                 <p className="text-gray-500 text-sm mt-1">Try extending the radius or changing filters.</p>
                             </div>
                         )}
-                     </div>
-                 )}
+                    </div>
+                )}
 
-                 {/* LOADING STATE (In-Body) */}
-                 {activeTab !== 'projects' && isLoading && placesData[activeTab].length === 0 && (
-                     <div className="flex flex-col items-center justify-center py-12 animate-fadeInUp">
-                         <Loader2 className="w-8 h-8 text-scbx animate-spin mb-3" />
-                         <span className="text-xs text-gray-500 font-medium">Fetching nearby places...</span>
-                     </div>
-                 )}
+                {/* LOADING STATE (In-Body) */}
+                {activeTab !== 'projects' && isLoading && placesData[activeTab].length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-12 animate-fadeInUp">
+                        <Loader2 className="w-8 h-8 text-scbx animate-spin mb-3" />
+                        <span className="text-xs text-gray-500 font-medium">Fetching nearby places...</span>
+                    </div>
+                )}
 
-                 {/* ERROR STATE */}
-                 {activeTab !== 'projects' && errorMsg && placesData[activeTab].length === 0 && (
-                     <div className="flex flex-col items-center justify-center py-10 px-6 text-center animate-fadeInUp">
-                         <div className="bg-red-50 p-3 rounded-full mb-3">
+                {/* ERROR STATE */}
+                {activeTab !== 'projects' && errorMsg && placesData[activeTab].length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-10 px-6 text-center animate-fadeInUp">
+                        <div className="bg-red-50 p-3 rounded-full mb-3">
                             <AlertCircle className="w-6 h-6 text-red-500" />
-                         </div>
-                         <span className="text-sm text-gray-700 font-bold">Data Unavailable</span>
-                         <span className="text-xs text-gray-500 mt-1 max-w-[200px]">{errorMsg}</span>
-                     </div>
-                 )}
+                        </div>
+                        <span className="text-sm text-gray-700 font-bold">Data Unavailable</span>
+                        <span className="text-xs text-gray-500 mt-1 max-w-[200px]">{errorMsg}</span>
+                    </div>
+                )}
 
-                 {/* OTHER TABS (Mall, Hospital, School) */}
-                 {activeTab !== 'projects' && (!isLoading || placesData[activeTab].length > 0) && !errorMsg && (
-                     <div className="space-y-3 animate-fadeInUp">
-                         {/* Disclaimer Note */}
-                         <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 flex items-center gap-2 mb-2">
-                             <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                             <div className="text-[10px] text-amber-700 font-medium">
-                                 <strong>Note:</strong> ผลลัพท์ที่ได้อาจจะไม่อัพเดท ให้ไปเช็คความถูกต้องเองเพิ่มเติม
-                             </div>
-                         </div>
+                {/* OTHER TABS (Mall, Hospital, School) */}
+                {activeTab !== 'projects' && (!isLoading || placesData[activeTab].length > 0) && !errorMsg && (
+                    <div className="space-y-3 animate-fadeInUp">
+                        {/* Disclaimer Note */}
+                        <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 flex items-center gap-2 mb-2">
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            <div className="text-[10px] text-amber-700 font-medium">
+                                <strong>Note:</strong> ผลลัพท์ที่ได้อาจจะไม่อัพเดท ให้ไปเช็คความถูกต้องเองเพิ่มเติม
+                            </div>
+                        </div>
 
-                         {sortedPlaces.map((place) => (
-                             <div 
-                                key={place.id} 
+                        {sortedPlaces.map((place) => (
+                            <div
+                                key={place.id}
                                 onClick={() => onPlaceClick && onPlaceClick(place)}
                                 className="bg-white/60 border border-white/50 p-4 rounded-2xl flex items-center gap-3 transition-all duration-200 backdrop-blur-sm cursor-pointer group hover:bg-white hover:shadow-lg hover:scale-[1.01]"
                             >
-                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:scale-110 ${
-                                     activeTab === 'mall' ? 'bg-orange-100 text-orange-600' :
-                                     activeTab === 'hospital' ? 'bg-red-100 text-red-600' :
-                                     'bg-blue-100 text-blue-600'
-                                 }`}>
-                                     {activeTab === 'mall' ? <ShoppingBag size={20} /> :
-                                      activeTab === 'hospital' ? <Stethoscope size={20} /> :
-                                      <GraduationCap size={20} />}
-                                 </div>
-                                 <div className="flex-1 min-w-0">
-                                     <h3 className="font-bold text-gray-800 text-sm truncate group-hover:text-scbx transition-colors">{place.name}</h3>
-                                     <div className="text-[10px] text-gray-500 mt-0.5 truncate">{place.address}</div>
-                                 </div>
-                                 <div className="text-right shrink-0">
-                                     <div className="flex items-center justify-end gap-1 text-yellow-500 mb-1">
-                                         <Star size={10} fill="currentColor" />
-                                         <span className="text-xs font-bold text-gray-700">{place.rating.toFixed(1)}</span>
-                                     </div>
-                                     <div className="text-[10px] font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full flex items-center gap-1 justify-end">
-                                         <MapPin size={8} /> {place.distance.toFixed(1)} km
-                                     </div>
-                                 </div>
-                             </div>
-                         ))}
-                         {sortedPlaces.length === 0 && (
-                             <div className="text-center py-10 text-gray-400 text-sm">
-                                 No locations found in this area.
-                             </div>
-                         )}
-                     </div>
-                 )}
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:scale-110 ${activeTab === 'mall' ? 'bg-orange-100 text-orange-600' :
+                                    activeTab === 'hospital' ? 'bg-red-100 text-red-600' :
+                                        'bg-blue-100 text-blue-600'
+                                    }`}>
+                                    {activeTab === 'mall' ? <ShoppingBag size={20} /> :
+                                        activeTab === 'hospital' ? <Stethoscope size={20} /> :
+                                            <GraduationCap size={20} />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="font-bold text-gray-800 text-sm truncate group-hover:text-scbx transition-colors">{place.name}</h3>
+                                    <div className="text-[10px] text-gray-500 mt-0.5 truncate">{place.address}</div>
+                                </div>
+                                <div className="text-right shrink-0">
+                                    <div className="flex items-center justify-end gap-1 text-yellow-500 mb-1">
+                                        <Star size={10} fill="currentColor" />
+                                        <span className="text-xs font-bold text-gray-700">{place.rating.toFixed(1)}</span>
+                                    </div>
+                                    <div className="text-[10px] font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full flex items-center gap-1 justify-end">
+                                        <MapPin size={8} /> {place.distance.toFixed(1)} km
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        {sortedPlaces.length === 0 && (
+                            <div className="text-center py-10 text-gray-400 text-sm">
+                                No locations found in this area.
+                            </div>
+                        )}
+                    </div>
+                )}
 
             </div>
         </div>

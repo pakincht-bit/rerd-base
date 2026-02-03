@@ -635,7 +635,7 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
                                                             ({p.soldUnits.toLocaleString()}/{p.totalUnits.toLocaleString()})
                                                         </div>
                                                     </td>
-                                                    <td className="px-4 py-3 text-right text-gray-900 font-bold">{p.saleSpeed6m}</td>
+                                                    <td className="px-4 py-3 text-right text-gray-900 font-bold">{p.saleSpeed6m} <span className="text-[10px] text-gray-400 font-normal">unit/mo</span></td>
                                                     <td className="px-4 py-3 text-right text-gray-600">{p.saleSpeed}</td>
                                                 </tr>
                                             );
