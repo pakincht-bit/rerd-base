@@ -394,6 +394,7 @@ const App: React.FC = () => {
                     onClose={() => setShowExportModal(false)}
                     onDownload={downloadDashboardImage}
                     activeTypes={searchState.typeFilter}
+                    selectedProject={selectedProject}
                 />
             )}
 

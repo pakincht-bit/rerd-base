@@ -8,9 +8,10 @@ interface ExportDashboardProps {
     onDownload: () => void;
     radius: number;
     activeTypes?: string[];
+    selectedProject?: Project | null;
 }
 
-const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, onDownload, radius, activeTypes }) => {
+const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, onDownload, radius, activeTypes, selectedProject }) => {
 
     // Shared helper for weighted average price calculation
     const getProjectWeightedPriceStats = (p: Project) => {
@@ -240,74 +241,15 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
         return keys[0];
     };
 
-    // Helper to get the latest sale speed for a project (sum of all subunit latest speeds)
-    const getProjectLatestSaleSpeed = (p: Project): string => {
-        // Filter subUnits based on activeTypes
-        const validUnits = p.subUnits.filter(u =>
-            !activeTypes || activeTypes.length === 0 || activeTypes.includes(u.type)
-        );
-
-        if (validUnits.length === 0) return '-';
-
-        // First, find the latest period across all subUnits
-        let latestPeriod: string | null = null;
-        validUnits.forEach(u => {
-            const periodKey = getLatestPeriodKey(u.history);
-            if (periodKey) {
-                if (!latestPeriod) {
-                    latestPeriod = periodKey;
-                } else {
-                    // Compare and keep the latest
-                    const parseKey = (key: string) => {
-                        const match = key.match(/H([12])\.(\d+)/);
-                        if (!match) return { year: 0, half: 0 };
-                        return { year: parseInt(match[2], 10), half: parseInt(match[1], 10) };
-                    };
-                    const current = parseKey(latestPeriod);
-                    const candidate = parseKey(periodKey);
-                    if (candidate.year > current.year ||
-                        (candidate.year === current.year && candidate.half > current.half)) {
-                        latestPeriod = periodKey;
-                    }
-                }
-            }
-        });
-
-        if (!latestPeriod) return '-';
-
-        // Sum the sale speed values for the latest period across all valid subUnits
-        let totalSpeed = 0;
-        validUnits.forEach(u => {
-            const speed = u.history[latestPeriod!];
-            if (speed !== undefined && !isNaN(speed)) {
-                totalSpeed += speed;
-            }
-        });
-
-        return totalSpeed > 0 ? totalSpeed.toFixed(2) : '-';
-    };
 
     const handleDownloadCSV = () => {
-        // Find the latest period key for the header label
-        let latestPeriodLabel = 'Latest';
-        for (const p of projects) {
-            for (const u of p.subUnits) {
-                const periodKey = getLatestPeriodKey(u.history);
-                if (periodKey) {
-                    latestPeriodLabel = periodKey;
-                    break;
-                }
-            }
-            if (latestPeriodLabel !== 'Latest') break;
-        }
-
-        // Updated Headers to match the Top 5 table format
+        // Updated Headers to match the granular subunit-based format
         const headers = [
-            "Rank", "Project Name", "Developer", "Launch date (YY.MM)",
+            "Project Name", "Developer", "Property Type", "Launch date (YY.MM)",
             "Usable Area (sq.m.)", "Land Area (sq.w.)",
             "price/sq.m", "price/sq.w.", "AVG PRICE",
             "sold %", "sold units", "total units",
-            `Sale Speed (${latestPeriodLabel})`, "Sale Speed (Total)"
+            "Sale Speed (Latest)", "Sale Speed (Total)"
         ];
 
         const escape = (val: string | number | undefined | null) => {
@@ -319,36 +261,55 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
             return str;
         };
 
-        // Sort all projects by latest sale speed (descending) to match the dashboard logic
-        const sortedProjectsForExport = [...projects].sort((a, b) => {
-            const aSpeed = parseFloat(getProjectLatestSaleSpeed(a)) || 0;
-            const bSpeed = parseFloat(getProjectLatestSaleSpeed(b)) || 0;
-            return bSpeed - aSpeed;
+        // Determine which projects to export
+        const projectsToExport = selectedProject ? [selectedProject] : projects;
+
+        const csvRows: string[] = [];
+
+        projectsToExport.forEach(p => {
+            p.subUnits.forEach(u => {
+                // Filter by activeTypes if they exist
+                if (activeTypes && activeTypes.length > 0 && !activeTypes.includes(u.type)) {
+                    return;
+                }
+
+                // Find latest period key for this subunit
+                const latestPeriodKey = getLatestPeriodKey(u.history) || 'Latest';
+                const latestSaleSpeed = u.history[latestPeriodKey] !== undefined ? u.history[latestPeriodKey].toFixed(2) : '-';
+
+                // Calculate price displays similar to calculateProjectRowStats but for single subunit
+                const priceVal = u.price;
+                const areaVal = parseFloat(u.usableArea);
+                const landVal = parseFloat(u.landArea);
+
+                const avgPriceDisplay = priceVal > 0 ? (priceVal < 1000000 ? priceVal.toLocaleString() : `${(priceVal / 1000000).toFixed(2)} MB`) : '-';
+
+                const calculatedPriceSqm = (priceVal > 0 && areaVal > 0) ? (priceVal / areaVal) * 1000000 : 0;
+                const priceSqmDisplay = calculatedPriceSqm > 0 ? Math.round(calculatedPriceSqm).toLocaleString() : '-';
+
+                const calculatedPriceSqw = (priceVal > 0 && landVal > 0) ? (priceVal / landVal) * 1000000 : 0;
+                const priceSqwDisplay = calculatedPriceSqw > 0 ? Math.round(calculatedPriceSqw).toLocaleString() : '-';
+
+                csvRows.push([
+                    escape(p.name),
+                    escape(p.developer),
+                    escape(u.type),
+                    escape(u.launchDate),
+                    escape(u.usableArea),
+                    escape(u.landArea),
+                    escape(priceSqmDisplay),
+                    escape(priceSqwDisplay),
+                    escape(avgPriceDisplay),
+                    escape(u.percentSold.toFixed(1)),
+                    escape(u.soldUnits),
+                    escape(u.totalUnits),
+                    escape(latestSaleSpeed),
+                    escape(u.saleSpeed)
+                ].join(","));
+            });
         });
 
-        const rows = sortedProjectsForExport.map((p, index) => {
-            const stats = calculateProjectRowStats(p);
-            const latestSaleSpeed = getProjectLatestSaleSpeed(p);
-
-            return [
-                index + 1, // Rank
-                escape(p.name),
-                escape(p.developer),
-                escape(stats.launchDate),
-                escape(stats.avgAreaDisplay),
-                escape(stats.avgLandDisplay),
-                escape(stats.priceSqmDisplay),
-                escape(stats.priceSqwDisplay),
-                escape(stats.avgPriceDisplay),
-                escape(p.percentSold),
-                escape(p.soldUnits),
-                escape(p.totalUnits),
-                escape(latestSaleSpeed),
-                escape(p.saleSpeed)
-            ].join(",");
-        });
-
-        const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\n");
+        const csvContent = "\uFEFF" + [headers.join(","), ...csvRows].join("\n");
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
