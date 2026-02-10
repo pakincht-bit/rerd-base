@@ -267,44 +267,115 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
         const csvRows: string[] = [];
 
         projectsToExport.forEach(p => {
+            // Group by Property Type
+            const typeGroups: Record<string, {
+                totalUnits: number;
+                soldUnits: number;
+                weightedPriceSum: number;
+                weightedUnitSum: number;
+                weightedAreaSum: number;
+                weightedAreaUnitSum: number;
+                weightedLandSum: number;
+                weightedLandUnitSum: number;
+                totalSaleSpeed: number;
+                currentSaleSpeed: number;
+                launchDates: string[];
+            }> = {};
+
             p.subUnits.forEach(u => {
                 // Filter by activeTypes if they exist
                 if (activeTypes && activeTypes.length > 0 && !activeTypes.includes(u.type)) {
                     return;
                 }
 
-                // Find latest period key for this subunit
-                const latestPeriodKey = getLatestPeriodKey(u.history) || 'Latest';
-                const latestSaleSpeed = u.history[latestPeriodKey] !== undefined ? u.history[latestPeriodKey].toFixed(2) : '-';
+                if (!typeGroups[u.type]) {
+                    typeGroups[u.type] = {
+                        totalUnits: 0,
+                        soldUnits: 0,
+                        weightedPriceSum: 0,
+                        weightedUnitSum: 0,
+                        weightedAreaSum: 0,
+                        weightedAreaUnitSum: 0,
+                        weightedLandSum: 0,
+                        weightedLandUnitSum: 0,
+                        totalSaleSpeed: 0,
+                        currentSaleSpeed: 0,
+                        launchDates: []
+                    };
+                }
 
-                // Calculate price displays similar to calculateProjectRowStats but for single subunit
-                const priceVal = u.price;
-                const areaVal = parseFloat(u.usableArea);
-                const landVal = parseFloat(u.landArea);
+                const group = typeGroups[u.type];
+                group.totalUnits += u.totalUnits;
+                group.soldUnits += u.soldUnits;
 
-                const avgPriceDisplay = priceVal > 0 ? (priceVal < 1000000 ? priceVal.toLocaleString() : `${(priceVal / 1000000).toFixed(2)} MB`) : '-';
+                // Weighted Price
+                if (u.price > 0 && u.totalUnits > 0) {
+                    group.weightedPriceSum += u.price * u.totalUnits;
+                    group.weightedUnitSum += u.totalUnits;
+                }
 
-                const calculatedPriceSqm = (priceVal > 0 && areaVal > 0) ? (priceVal / areaVal) * 1000000 : 0;
+                // Weighted Area
+                if (parseFloat(u.usableArea) > 0 && u.totalUnits > 0) {
+                    group.weightedAreaSum += parseFloat(u.usableArea) * u.totalUnits;
+                    group.weightedAreaUnitSum += u.totalUnits;
+                }
+
+                // Weighted Land
+                if (parseFloat(u.landArea) > 0 && u.totalUnits > 0) {
+                    group.weightedLandSum += parseFloat(u.landArea) * u.totalUnits;
+                    group.weightedLandUnitSum += u.totalUnits;
+                }
+
+                // Sale Speeds
+                group.totalSaleSpeed += parseFloat(u.saleSpeed) || 0;
+
+                const latestPeriodKey = getLatestPeriodKey(u.history);
+                const latestSpeed = latestPeriodKey && u.history[latestPeriodKey] !== undefined
+                    ? u.history[latestPeriodKey]
+                    : 0;
+                group.currentSaleSpeed += latestSpeed;
+
+                if (u.launchDate && u.launchDate !== '-') {
+                    group.launchDates.push(u.launchDate);
+                }
+            });
+
+            // Generate rows from groups
+            Object.entries(typeGroups).forEach(([type, stats]) => {
+                // Calculate Averages
+                const avgPrice = stats.weightedUnitSum > 0 ? stats.weightedPriceSum / stats.weightedUnitSum : 0;
+                const avgArea = stats.weightedAreaUnitSum > 0 ? stats.weightedAreaSum / stats.weightedAreaUnitSum : 0;
+                const avgLand = stats.weightedLandUnitSum > 0 ? stats.weightedLandSum / stats.weightedLandUnitSum : 0;
+
+                // Display Strings
+                const launchDate = stats.launchDates.length > 0 ? stats.launchDates.sort()[0] : '-';
+                const avgPriceDisplay = avgPrice > 0 ? (avgPrice < 1000000 ? avgPrice.toLocaleString() : `${(avgPrice / 1000000).toFixed(2)} MB`) : '-';
+
+                // New Calculations: Price/sq.m. = (Avg Price / Usable Area) * 1,000,000
+                const calculatedPriceSqm = (avgPrice > 0 && avgArea > 0) ? (avgPrice / avgArea) * 1000000 : 0;
                 const priceSqmDisplay = calculatedPriceSqm > 0 ? Math.round(calculatedPriceSqm).toLocaleString() : '-';
 
-                const calculatedPriceSqw = (priceVal > 0 && landVal > 0) ? (priceVal / landVal) * 1000000 : 0;
+                // New Calculations: Price/sq.w. = (Avg Price / Land Area) * 1,000,000
+                const calculatedPriceSqw = (avgPrice > 0 && avgLand > 0) ? (avgPrice / avgLand) * 1000000 : 0;
                 const priceSqwDisplay = calculatedPriceSqw > 0 ? Math.round(calculatedPriceSqw).toLocaleString() : '-';
+
+                const percentSold = stats.totalUnits > 0 ? (stats.soldUnits / stats.totalUnits) * 100 : 0;
 
                 csvRows.push([
                     escape(p.name),
                     escape(p.developer),
-                    escape(u.type),
-                    escape(u.launchDate),
-                    escape(u.usableArea),
-                    escape(u.landArea),
+                    escape(type),
+                    escape(launchDate),
+                    escape(avgArea > 0 ? avgArea.toFixed(1) : '-'),
+                    escape(avgLand > 0 ? avgLand.toFixed(1) : '-'),
                     escape(priceSqmDisplay),
                     escape(priceSqwDisplay),
                     escape(avgPriceDisplay),
-                    escape(u.percentSold.toFixed(1)),
-                    escape(u.soldUnits),
-                    escape(u.totalUnits),
-                    escape(latestSaleSpeed),
-                    escape(u.saleSpeed)
+                    escape(percentSold.toFixed(1)),
+                    escape(stats.soldUnits),
+                    escape(stats.totalUnits),
+                    escape(stats.currentSaleSpeed.toFixed(2)),
+                    escape(stats.totalSaleSpeed.toFixed(2))
                 ].join(","));
             });
         });
