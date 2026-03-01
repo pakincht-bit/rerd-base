@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Project, SearchState } from '../types';
-import { MapPin, Hash, Search, X, ChevronDown, ChevronUp, RotateCcw, PanelLeftClose, PanelLeftOpen, Home, Check, Calendar, Percent } from 'lucide-react';
+import { MapPin, Hash, Search, X, ChevronDown, RotateCcw, PanelLeftClose, PanelLeftOpen, Home, Check, Calendar, Percent } from 'lucide-react';
 
 interface SidebarProps {
     searchState: SearchState;
@@ -137,13 +137,16 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (isCollapsed) {
         return (
             <aside className="w-full h-full flex flex-col items-center py-4 bg-transparent">
-                <button
-                    onClick={onToggle}
-                    className="p-3 rounded-full hover:bg-black/5 text-gray-500 hover:text-gray-900 transition-colors mb-6 border border-transparent hover:border-black/10"
-                    title="Expand Filters"
-                >
-                    <PanelLeftOpen className="w-6 h-6" />
-                </button>
+                <div className="mb-6 flex flex-col items-center gap-4">
+
+                    <button
+                        onClick={onToggle}
+                        className="p-3 rounded-full hover:bg-black/5 text-gray-500 hover:text-gray-900 transition-colors border border-transparent hover:border-black/10"
+                        title="Expand Filters"
+                    >
+                        <PanelLeftOpen className="w-6 h-6" />
+                    </button>
+                </div>
 
                 <div className="flex flex-col gap-5 w-full items-center overflow-y-auto custom-scrollbar no-scrollbar flex-1 pb-4">
                     {/* Search Mode Icon */}
@@ -214,9 +217,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         <aside className="w-full h-full flex flex-col bg-transparent">
             <div className="px-6 py-4 border-b border-gray-100/50 bg-white/40 backdrop-blur-sm sticky top-0 z-10 flex flex-col gap-3">
                 <div className="flex items-center justify-between w-full">
-                    <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                        Search projects
-                    </h2>
+                    <h2 className="text-lg font-bold text-gray-900">Search location</h2>
                     <button
                         onClick={onToggle}
                         className="p-2 rounded-full hover:bg-white/60 text-gray-400 hover:text-gray-800 transition-colors"

@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Map as MapIcon, FileText, UploadCloud, Download, Sparkles, X, FileSpreadsheet, Loader, Search, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen, RefreshCw, MapPin, RotateCcw, Upload } from 'lucide-react';
-import { Project, SearchState, AIAnalysisResult, NearbyPlace } from './types';
+import React, { useState, useMemo } from 'react';
+import { UploadCloud, Download, X, Loader, RefreshCw, Upload } from 'lucide-react';
+import { Project, SearchState, NearbyPlace } from './types';
 import Sidebar from './components/Sidebar';
 import MapComponent from './components/Map';
 import ProjectDetailPanel from './components/ProjectDetailPanel';
 import ResultsPanel from './components/FilterModal';
 import ExportDashboard from './components/ExportDashboard';
 import { parseCSV } from './services/csvService';
-import { generateMarketAnalysis } from './services/geminiService';
 import html2canvas from 'html2canvas';
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -245,7 +244,7 @@ const App: React.FC = () => {
         try {
             const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#f9fafb' });
             const link = document.createElement('a');
-            link.download = `RERD_Dashboard_Summary.png`;
+            link.download = `Radia_Dashboard_Summary.png`;
             link.href = canvas.toDataURL('image/png');
             link.click();
         } catch (err) {
@@ -282,9 +281,8 @@ const App: React.FC = () => {
             <header className="fixed top-4 left-4 right-4 z-50 flex items-center justify-between pointer-events-none">
                 {/* Brand Pill */}
                 <div className="flex items-center h-12 bg-white rounded-full shadow-lg border border-white/50 px-4 pointer-events-auto">
-                    <div className="flex items-center gap-2 text-scbx font-bold text-xl select-none">
-                        <MapIcon className="w-6 h-6 fill-current" />
-                        <span className="tracking-tight">RERD</span>
+                    <div className="flex items-center gap-2 select-none">
+                        <img src="/logo_radia.png" alt="Radia" className="h-7 w-auto" />
                     </div>
                     {fileName && (
                         <div className="flex items-center ml-4 pl-4 border-l border-gray-100 min-w-0">

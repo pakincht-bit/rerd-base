@@ -1,7 +1,7 @@
 <div align="center">
   <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 
-  # 🏘️ RERD — Real Estate Research Dashboard
+  # 🏘️ Radia — Real Estate Research Dashboard
 
   **A comprehensive, interactive real estate market analysis tool**
   **with map visualization, data-driven filtering, AI-powered insights, and exportable reports.**
@@ -42,13 +42,13 @@ Real estate market analysis in Thailand is traditionally a **manual, time-consum
 
 4.  **Inconsistent Reporting** — Each analyst may format reports differently, making it difficult to standardize insights across teams and stakeholders.
 
-**RERD was built to solve all of these problems in a single, interactive web application.**
+**Radia was built to solve all of these problems in a single, interactive web application.**
 
 ---
 
 ## 💡 What — The Solution
 
-**RERD (Real Estate Research Dashboard)** is an interactive, browser-based dashboard that transforms raw CSV market data into a rich, map-centric analysis workspace.
+**Radia (Real Estate Research Dashboard)** is an interactive, browser-based dashboard that transforms raw CSV market data into a rich, map-centric analysis workspace.
 
 ### Core Capabilities at a Glance
 
@@ -194,7 +194,7 @@ Real estate market analysis in Thailand is traditionally a **manual, time-consum
 ## 📁 Project Structure
 
 ```
-rerd-base-main/
+radia-base-main/
 ├── index.html                  # Entry HTML with Tailwind config, Leaflet CSS, custom styles
 ├── index.tsx                   # React DOM render entry point (with Vercel Analytics)
 ├── App.tsx                     # Root component — state management, layout, data flow
@@ -232,8 +232,8 @@ rerd-base-main/
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/pakincht-bit/rerd-base.git
-cd rerd-base
+git clone https://github.com/pakincht-bit/radia-base.git
+cd radia-base
 
 # 2. Install dependencies
 npm install
