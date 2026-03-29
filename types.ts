@@ -33,7 +33,7 @@ export interface Project {
 export interface NearbyPlace {
   id: string;
   name: string;
-  type: 'mall' | 'hospital' | 'school';
+  type: 'mall' | 'hospital' | 'school' | 'hotel';
   distance: number;
   rating: number;
   address: string;
@@ -54,6 +54,7 @@ export interface SearchState {
   minLaunchDate: string | null; // Format "YY.MM" (e.g. "60.01")
   maxSoldPercent: number; // New filter for sold % threshold
   priceSegment: string | null; // Price segment filter (e.g., "< 0.5", "0.5-1.0", etc.)
+  developerFilter: string[]; // Filter by developer name
 }
 
 export interface AIAnalysisResult {

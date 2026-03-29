@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Project } from '../types';
-import { X, Download, TrendingUp, Home, DollarSign, Activity, PieChart, FileSpreadsheet, BarChart3 } from 'lucide-react';
+import { X, TrendingUp, Home, DollarSign, Activity } from 'lucide-react';
 
 interface ExportDashboardProps {
     projects: Project[];
@@ -399,9 +399,8 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
             : `${(val / 1000000).toFixed(2)} MB`;
     };
 
-    // Helper for Pie Chart Slices - Updated to Primary Color Shades (KBANK Green)
-    // Palette: Variations of green for KBANK CI
-    const pieColors = ['#004D25', '#007A33', '#00A950', '#42B97E', '#7ACC9F', '#B3E0C1', '#D4EDDB', '#E6F4EA'];
+    // Helper for Pie Chart Slices - Primary Color Shades
+    const pieColors = ['#1B333C', '#2A4F5C', '#3D6D7D', '#538B9E', '#6FA8BB', '#92C1D0', '#B5D7E2', '#D4EAF0'];
 
     let cumulativePercent = 0;
     const pieSlices = stats.pieChartData.map((d, i) => {
@@ -426,88 +425,102 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
 
     return (
         <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white/90 backdrop-blur-2xl rounded-3xl shadow-2xl w-full max-w-[95vw] max-h-[90vh] flex flex-col border border-white/50 overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-2xl rounded-3xl shadow-premium-lg w-full max-w-[95vw] max-h-[90vh] flex flex-col border border-white/50 dark:border-gray-700/50 overflow-hidden animate-in zoom-in-95 duration-200">
 
                 {/* Header - Fixed Controls Only */}
-                <div className="p-6 border-b border-gray-100 flex justify-end items-center bg-white/50 shrink-0 gap-3">
+                <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-end items-center bg-white/50 dark:bg-gray-900/50 shrink-0 gap-3">
                     <button
                         onClick={handleDownloadCSV}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-black hover:bg-gray-800 text-white text-sm font-bold shadow-sm transition-transform active:scale-95"
+                        className="bg-white hover:bg-gray-50 text-gray-700 px-5 py-2 rounded-lg text-xs font-display font-normal transition-colors active:opacity-80 border border-gray-200"
                     >
-                        <FileSpreadsheet className="w-4 h-4" /> Export CSV
+                        Export CSV
                     </button>
                     <button
                         onClick={onDownload}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-scbx hover:bg-scbxHover text-white text-sm font-bold shadow-lg shadow-green-100 transition-transform active:scale-95"
+                        className="bg-scbx hover:bg-scbxHover text-white px-5 py-2 rounded-lg text-xs font-display font-normal transition-colors active:opacity-80 shadow-[inset_0_1px_8px_rgba(255,255,255,0.2),inset_0_-1px_4px_rgba(0,0,0,0.15)]"
                     >
-                        <Download className="w-4 h-4" /> Download Image
+                        Download Image
                     </button>
                     <button
                         onClick={onClose}
-                        className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-black flex items-center justify-center transition"
+                        className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-black dark:hover:text-white flex items-center justify-center transition"
                     >
                         <X className="w-5 h-5" />
                     </button>
                 </div>
 
                 {/* Dashboard Content (Scrollable) */}
-                <div className="flex-1 overflow-y-auto p-8 bg-gray-50/50 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-8 bg-gray-50/50 dark:bg-gray-950/50 custom-scrollbar">
                     {/* ID moved here to capture full content */}
-                    <div id="dashboard-export-container" className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+                    <div id="dashboard-export-container" className="bg-white p-8 rounded-3xl">
 
                         {/* Internal Report Header (Part of the export) */}
-                        <div className="flex justify-between items-end mb-8 pb-6 border-b border-gray-100">
+                        <div className="flex justify-between items-end mb-8 pb-6 border-b border-gray-50">
                             <div>
-
-                                <div className="text-xs font-bold text-scbx uppercase tracking-wider mb-1">Market Analysis Dashboard</div>
-                                <h3 className="text-3xl font-bold text-gray-900">Summary Report</h3>
+                                <div className="text-[11px] font-medium text-scbx uppercase tracking-wider mb-1">Market Analysis Dashboard</div>
+                                <h3 className="text-[32px] font-light font-display text-gray-900 tracking-tight">Summary Report</h3>
                             </div>
                             <div className="text-right">
-                                <div className="text-xs text-gray-400 font-bold uppercase">Data Source</div>
-                                <div className="text-sm font-medium text-gray-700">{projects.length} Projects in {radius}km radius</div>
-                                <div className="text-xs text-gray-400 mt-1">{new Date().toLocaleDateString()}</div>
+                                <div className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Data Source</div>
+                                <div className="text-[14px] font-light font-display text-gray-800 tracking-tight mt-0.5">{projects.length} Projects in {radius}km radius</div>
+                                <div className="text-[11px] text-gray-400 font-mono mt-1">{new Date().toLocaleDateString()}</div>
                             </div>
                         </div>
 
                         {/* 1. Key Metrics Row */}
                         <div className="grid grid-cols-4 gap-6 mb-8">
-                            <div className="p-5 rounded-2xl bg-blue-50/50 border border-blue-100">
-                                <div className="flex items-center gap-2 text-blue-600 mb-2">
-                                    <Home className="w-4 h-4" />
-                                    <span className="text-xs font-bold uppercase">Total Supply</span>
+                            <div className="bg-[#f8faf9] p-6 rounded-3xl min-h-[140px] flex flex-col justify-between">
+                                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-[0_2px_8px_-4px_rgba(0,0,0,0.1)]">
+                                    <Home className="w-5 h-5 text-gray-500" strokeWidth={1.5} />
                                 </div>
-                                <div className="text-3xl font-bold text-gray-900">{stats.total} <span className="text-sm text-gray-500 font-medium">Projects</span></div>
+                                <div className="mt-8">
+                                    <div className="text-[11px] font-medium text-gray-500 mb-1 tracking-wide uppercase">Total Supply</div>
+                                    <div className="text-[32px] font-light font-display text-gray-900 flex items-baseline gap-2 leading-none tracking-tight">
+                                        {stats.total} <span className="text-[11px] font-medium text-gray-400 tracking-wide font-sans">Projects</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="p-5 rounded-2xl bg-green-50/50 border border-green-100">
-                                <div className="flex items-center gap-2 text-green-600 mb-2">
-                                    <Activity className="w-4 h-4" />
-                                    <span className="text-xs font-bold uppercase">Avg. Sold Rate</span>
+                            <div className="bg-[#f8faf9] p-6 rounded-3xl min-h-[140px] flex flex-col justify-between">
+                                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-[0_2px_8px_-4px_rgba(0,0,0,0.1)]">
+                                    <Activity className="w-5 h-5 text-gray-500" strokeWidth={1.5} />
                                 </div>
-                                <div className="text-3xl font-bold text-gray-900">{stats.avgSold.toFixed(1)}%</div>
+                                <div className="mt-8">
+                                    <div className="text-[11px] font-medium text-gray-500 mb-1 tracking-wide uppercase">Avg. Sold Rate</div>
+                                    <div className="text-[32px] font-light font-display text-gray-900 leading-none tracking-tight">
+                                        {stats.avgSold.toFixed(1)}%
+                                    </div>
+                                </div>
                             </div>
-                            <div className="p-5 rounded-2xl bg-green-50/50 border border-green-100/50">
-                                <div className="flex items-center gap-2 text-scbx mb-2">
-                                    <TrendingUp className="w-4 h-4" />
-                                    <span className="text-xs font-bold uppercase">Total Sale Speed</span>
+                            <div className="bg-[#f8faf9] p-6 rounded-3xl min-h-[140px] flex flex-col justify-between">
+                                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-[0_2px_8px_-4px_rgba(0,0,0,0.1)]">
+                                    <TrendingUp className="w-5 h-5 text-gray-500" strokeWidth={1.5} />
                                 </div>
-                                <div className="text-3xl font-bold text-gray-900">{stats.totalSpeed.toFixed(2)} <span className="text-sm text-gray-500 font-medium">unit/mo</span></div>
+                                <div className="mt-8">
+                                    <div className="text-[11px] font-medium text-gray-500 mb-1 tracking-wide uppercase">Total Sale Speed</div>
+                                    <div className="text-[32px] font-light font-display text-gray-900 flex items-baseline gap-2 leading-none tracking-tight">
+                                        {stats.totalSpeed.toFixed(2)} <span className="text-[11px] font-medium text-gray-400 tracking-wide font-sans lowercase">unit/mo</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="p-5 rounded-2xl bg-orange-50/50 border border-orange-100">
-                                <div className="flex items-center gap-2 text-orange-600 mb-2">
-                                    <DollarSign className="w-4 h-4" />
-                                    <span className="text-xs font-bold uppercase">Avg. Price</span>
+                            <div className="bg-[#f8faf9] p-6 rounded-3xl min-h-[140px] flex flex-col justify-between">
+                                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-[0_2px_8px_-4px_rgba(0,0,0,0.1)]">
+                                    <DollarSign className="w-5 h-5 text-gray-500" strokeWidth={1.5} />
                                 </div>
-                                <div className="text-3xl font-bold text-gray-900">{formatPrice(stats.avgPrice)}</div>
+                                <div className="mt-8">
+                                    <div className="text-[11px] font-medium text-gray-500 mb-1 tracking-wide uppercase">Avg. Price</div>
+                                    <div className="text-[32px] font-light font-display text-gray-900 flex items-baseline gap-2 leading-none tracking-tight">
+                                        {formatPrice(stats.avgPrice).replace(' MB', '')} <span className="text-[11px] font-medium text-gray-400 tracking-wide font-sans">{formatPrice(stats.avgPrice).includes('MB') ? 'MB' : 'THB'}</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         {/* 2. Charts Row */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                             {/* Type Distribution - Pie Chart */}
-                            <div className="p-6 rounded-3xl border border-gray-100 bg-white shadow-sm flex flex-col">
-                                <div className="flex items-center gap-2 mb-6">
-                                    <div className="p-2 bg-gray-100 rounded-lg"><PieChart className="w-5 h-5 text-gray-700" /></div>
-                                    <h4 className="font-bold text-gray-800">Project Type Distribution</h4>
+                            <div className="bg-[#f8faf9] p-6 rounded-3xl flex flex-col">
+                                <div className="flex flex-col mb-6">
+                                    <h2 className="text-lg font-medium text-gray-800 tracking-tight pl-2">Project Type Distribution</h2>
                                 </div>
                                 {/* New Donut Design with Center Text and Styled Legend */}
                                 <div className="flex items-center justify-center gap-8 h-[240px] flex-1">
@@ -530,10 +543,10 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
 
                                         {/* Center Text overlay */}
                                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                            <span className="text-3xl font-extrabold text-gray-900 leading-none">
+                                            <span className="text-[32px] font-light font-display text-gray-900 leading-none tracking-tight">
                                                 {projects.length}
                                             </span>
-                                            <span className="text-xs font-bold text-gray-400 uppercase mt-1">
+                                            <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mt-1 font-sans">
                                                 Projects
                                             </span>
                                         </div>
@@ -551,14 +564,14 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
 
                                                 {/* Text */}
                                                 <div className="flex flex-wrap items-baseline gap-1.5 text-gray-600">
-                                                    <span className="font-bold text-gray-900 min-w-[32px]">
+                                                    <span className="font-mono text-gray-900 min-w-[32px]">
                                                         {(slice.percent * 100).toFixed(0)}%
                                                     </span>
-                                                    <span className="font-medium truncate max-w-[120px]" title={slice.label}>
+                                                    <span className="text-xs truncate max-w-[120px] font-medium" title={slice.label}>
                                                         {slice.label}
                                                     </span>
-                                                    <span className="text-gray-400">
-                                                        - {slice.count}
+                                                    <span className="text-xs text-gray-400 font-mono">
+                                                        ({slice.count})
                                                     </span>
                                                 </div>
                                             </div>
@@ -568,10 +581,9 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
                             </div>
 
                             {/* Price Segmentation - Bar Chart */}
-                            <div className="p-6 rounded-3xl border border-gray-100 bg-white shadow-sm flex flex-col">
-                                <div className="flex items-center gap-2 mb-6">
-                                    <div className="p-2 bg-gray-100 rounded-lg"><BarChart3 className="w-5 h-5 text-gray-700" /></div>
-                                    <h4 className="font-bold text-gray-800">Average Price Segmentation</h4>
+                            <div className="bg-[#f8faf9] p-6 rounded-3xl flex flex-col">
+                                <div className="flex flex-col mb-6">
+                                    <h2 className="text-lg font-medium text-gray-800 tracking-tight pl-2">Average Price Segmentation</h2>
                                 </div>
                                 <div className="flex-1 flex items-end gap-2 h-[200px] px-2 pb-2">
                                     {stats.priceSegments.map((seg, i) => {
@@ -590,7 +602,7 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
                                                     </div>
 
                                                     {/* Count Label - Sits on top of the bar */}
-                                                    <div className={`text-[10px] font-bold text-scbx mb-1 transition-opacity ${count > 0 ? 'opacity-100' : 'opacity-0'}`}>
+                                                    <div className={`text-[10px] font-mono font-medium text-scbx mb-1 transition-opacity ${count > 0 ? 'opacity-100' : 'opacity-0'}`}>
                                                         {count}
                                                     </div>
 
@@ -601,12 +613,12 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
                                                     ></div>
 
                                                     {/* X-Axis Baseline */}
-                                                    <div className="absolute bottom-0 left-0 right-0 h-px bg-gray-100 -z-10"></div>
+                                                    <div className="absolute bottom-0 left-0 right-0 h-px bg-gray-200 -z-10"></div>
                                                 </div>
 
                                                 {/* Label Area - Fixed height to ensure all bars start at same visual baseline */}
                                                 <div className="h-6 mt-2 w-full flex items-center justify-center">
-                                                    <span className="text-[9px] text-gray-500 font-medium text-center leading-tight">
+                                                    <span className="text-[9px] text-gray-500 font-mono text-center leading-tight">
                                                         {seg.label}
                                                     </span>
                                                 </div>
@@ -614,73 +626,76 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
                                         )
                                     })}
                                 </div>
-                                <div className="text-center text-[10px] text-gray-400 mt-2 font-medium uppercase tracking-wider">Price Range (MB)</div>
+                                <div className="text-center text-[10px] text-gray-400 mt-2 font-medium tracking-wide">Price Range (MB)</div>
                             </div>
                         </div>
 
                         {/* 3. Top Performers Table */}
                         <div>
-                            <div className="flex items-center gap-2 mb-4">
-                                <TrendingUp className="w-5 h-5 text-scbx" />
-                                <h4 className="font-bold text-gray-800">Top 5 Fastest Selling Projects</h4>
+                            <div className="flex items-center gap-2 mb-4 pl-2">
+                                <h2 className="text-lg font-medium text-gray-800 tracking-tight">Top 5 Fastest Selling Projects</h2>
                             </div>
-                            <div className="overflow-x-auto rounded-2xl border border-gray-200">
-                                <table className="w-full text-sm whitespace-nowrap">
-                                    <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs">
-                                        <tr>
+                            <div className="bg-[#f8faf9] rounded-3xl py-6 overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-xs whitespace-nowrap">
+                                    <thead>
+                                        <tr className="bg-gray-50/80 border-b border-gray-100 text-gray-400 text-[11px] font-medium tracking-wide">
                                             <th className="px-4 py-3 text-left">Rank</th>
                                             <th className="px-4 py-3 text-left">Project Name <span className="text-[9px] font-normal text-gray-400 ml-1">(Developer)</span></th>
-                                            <th className="px-4 py-3 text-center">Launch date (YY.MM)</th>
+                                            <th className="px-2 py-3 text-center">Launch date (YY.MM)</th>
                                             <th className="px-4 py-3 text-right">Usable Area<br /><span className="text-[9px] lowercase">(sq.m.)</span></th>
                                             <th className="px-4 py-3 text-right">Land Area<br /><span className="text-[9px] lowercase">(sq.w.)</span></th>
                                             <th className="px-4 py-3 text-right">price/sq.m</th>
                                             <th className="px-4 py-3 text-right">price/sq.w.</th>
                                             <th className="px-4 py-3 text-right">AVG PRICE</th>
                                             <th className="px-4 py-3 text-right">sold%</th>
-                                            <th className="px-4 py-3 text-right">Sale Speed (6 เดือน)</th>
-                                            <th className="px-4 py-3 text-right">Sale Speed</th>
+                                            <th className="px-2 py-3 text-right">Sale Speed (6 เดือน)</th>
+                                            <th className="px-2 py-3 text-right">Sale Speed</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-100">
+                                    <tbody className="divide-y divide-gray-50">
                                         {stats.topProjects.map((p, i) => {
                                             const rowStats = calculateProjectRowStats(p);
 
                                             return (
-                                                <tr key={p.projectId} className="hover:bg-gray-50/50">
-                                                    <td className="px-4 py-3">
-                                                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${i === 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>
+                                                <tr key={p.projectId} className="transition-all duration-300">
+                                                    <td className="px-4 py-3.5">
+                                                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-mono font-medium ${i === 0 ? 'bg-[#FFF9C4] text-yellow-800' : 'bg-white text-gray-600 border border-gray-100'}`}>
                                                             {i + 1}
                                                         </span>
                                                     </td>
-                                                    <td className="px-4 py-3">
-                                                        <div className="font-bold text-gray-800">{p.name}</div>
-                                                        <div className="text-[10px] text-gray-500">{p.developer}</div>
+                                                    <td className="px-4 py-3.5">
+                                                        <div className="font-medium text-gray-800 text-[13px]">{p.name}</div>
+                                                        <div className="text-[10px] text-gray-500 font-sans tracking-wide truncate max-w-[150px]" title={p.developer}>{p.developer}</div>
                                                     </td>
-                                                    <td className="px-4 py-3 text-center font-mono text-gray-600">{rowStats.launchDate}</td>
-                                                    <td className="px-4 py-3 text-right font-mono text-gray-600 ">{rowStats.avgAreaDisplay}</td>
-                                                    <td className="px-4 py-3 text-right font-mono text-gray-600 ">{rowStats.avgLandDisplay}</td>
-                                                    <td className="px-4 py-3 text-right font-mono text-gray-600 font-bold">{rowStats.priceSqmDisplay}</td>
-                                                    <td className="px-4 py-3 text-right font-mono text-gray-600 font-bold">{rowStats.priceSqwDisplay}</td>
-                                                    <td className="px-4 py-3 text-right font-mono text-gray-600 font-bold">{rowStats.avgPriceDisplay}</td>
-                                                    <td className="px-4 py-3 text-right text-green-800 font-bold">
-                                                        <div className="text-sm">{p.percentSold}%</div>
-                                                        <div className="text-[9px] text-gray-400 font-normal mt-0.5">
-                                                            ({p.soldUnits.toLocaleString()}/{p.totalUnits.toLocaleString()})
+                                                    <td className="px-2 py-3.5 text-center text-gray-500 font-mono">{rowStats.launchDate}</td>
+                                                    <td className="px-4 py-3.5 text-right text-gray-500 font-mono">{rowStats.avgAreaDisplay}</td>
+                                                    <td className="px-4 py-3.5 text-right text-gray-500 font-mono">{rowStats.avgLandDisplay}</td>
+                                                    <td className="px-4 py-3.5 text-right font-medium text-gray-800 font-mono">{rowStats.priceSqmDisplay}</td>
+                                                    <td className="px-4 py-3.5 text-right font-medium text-gray-800 font-mono">{rowStats.priceSqwDisplay}</td>
+                                                    <td className="px-4 py-3.5 text-right font-medium text-gray-800 font-mono">{rowStats.avgPriceDisplay}</td>
+                                                    <td className="px-4 py-3.5 text-right font-mono text-scbx font-bold">
+                                                        <div className="flex flex-col items-end">
+                                                            <span>{Math.round(Number(p.percentSold))}%</span>
+                                                            <span className="text-[9px] text-gray-400 font-sans font-normal mt-0.5">
+                                                                ({p.soldUnits.toLocaleString()}/{p.totalUnits.toLocaleString()})
+                                                            </span>
                                                         </div>
                                                     </td>
-                                                    <td className="px-4 py-3 text-right text-gray-900 font-bold">{p.saleSpeed6m} <span className="text-[10px] text-gray-400 font-normal">unit/mo</span></td>
-                                                    <td className="px-4 py-3 text-right text-gray-600">{p.saleSpeed}</td>
+                                                    <td className="px-2 py-3.5 text-right text-gray-900 font-bold font-mono">{p.saleSpeed6m} <span className="text-[9px] text-gray-400 font-sans font-normal">unit/mo</span></td>
+                                                    <td className="px-2 py-3.5 text-right text-gray-500 font-mono">{p.saleSpeed}</td>
                                                 </tr>
                                             );
                                         })}
                                     </tbody>
                                 </table>
                             </div>
+                            </div>
                         </div>
 
                         {/* Footer */}
                         <div className="mt-8 pt-4 border-t border-gray-100 flex justify-between items-center text-xs text-gray-400">
-                            <img src="/logo_radia.png" alt="Radia" className="h-6 w-auto" />
+                            <img src="/logo-text.svg" alt="Radia" className="h-6 w-auto" />
                             <div>{new Date().toLocaleDateString()}</div>
                         </div>
                     </div>

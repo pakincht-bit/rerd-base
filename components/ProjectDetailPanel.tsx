@@ -1,7 +1,7 @@
 // ... (imports remain the same)
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Project } from '../types';
-import { X, Info, Home, Activity, LayoutDashboard, TrendingUp } from 'lucide-react';
+import { X, Copy, Check } from 'lucide-react';
 
 interface ProjectDetailPanelProps {
     project: Project | null;
@@ -43,117 +43,125 @@ const getColor = (type: string, index: number) => {
     return FALLBACK_COLORS[index % FALLBACK_COLORS.length];
 };
 
+const AnimatedCounter = ({ value, decimals = 0, duration = 1200 }: { value: number, decimals?: number, duration?: number }) => {
+    const [count, setCount] = useState(0);
+
+    useEffect(() => {
+        let startTime: number | null = null;
+        let animationFrame: number;
+
+        const animate = (timestamp: number) => {
+            if (!startTime) startTime = timestamp;
+            const progress = timestamp - startTime;
+            const percentage = Math.min(progress / duration, 1);
+            
+            // easeOutExpo for a really snappy, premium stop
+            const easeOut = percentage === 1 ? 1 : 1 - Math.pow(2, -10 * percentage);
+            
+            setCount(value * easeOut);
+
+            if (percentage < 1) {
+                animationFrame = requestAnimationFrame(animate);
+            }
+        };
+
+        // Start animation after a tiny delay so the panel slide-in isn't interrupted
+        const timeout = setTimeout(() => {
+            animationFrame = requestAnimationFrame(animate);
+        }, 150);
+
+        return () => {
+            clearTimeout(timeout);
+            if (animationFrame) cancelAnimationFrame(animationFrame);
+        };
+    }, [value, duration]);
+
+    return <>{(count || 0).toFixed(decimals)}</>;
+};
+
 const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClose, className }) => {
-    const [activeTab, setActiveTab] = useState<'overview' | 'trends'>('overview');
     const [hoveredPoint, setHoveredPoint] = useState<{ x: number, y: number, pointIndex: number, label: string } | null>(null);
+    const [copied, setCopied] = useState(false);
+
+    const handleCopyCoords = () => {
+        if (!project) return;
+        const coords = `${project.lat.toFixed(5)}, ${project.lng.toFixed(5)}`;
+        navigator.clipboard.writeText(coords).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
+    };
 
     // Default positioning if no className provided
     const positionClass = className || "md:left-[450px] left-4";
 
     const renderOverview = () => (
-        <div className="space-y-8 animate-fadeInUp pb-10">
+        <>
             {/* Key Stats Grid */}
-            <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white/50 p-4 rounded-2xl border border-gray-100 shadow-sm backdrop-blur-sm">
-                    <div className="flex items-center gap-2 text-gray-400 mb-2">
-                        <Activity className="w-4 h-4" />
-                        <span className="text-xs font-bold uppercase tracking-wider">Sold %</span>
-                    </div>
-                    <div className="text-2xl font-bold text-gray-800 flex items-baseline gap-2">
-                        {project!.percentSold}%
-                        <span className="text-xs font-medium text-gray-500">
-                            ({project!.soldUnits.toLocaleString()} / {project!.totalUnits.toLocaleString()})
-                        </span>
-                    </div>
-                    <div className="w-full bg-gray-200 h-1.5 rounded-full mt-2 overflow-hidden">
-                        <div className="bg-green-500 h-full rounded-full" style={{ width: `${project!.percentSold}%` }}></div>
+            <div className="grid grid-cols-2 gap-4 animate-fadeInUp" style={{ animationFillMode: 'both', animationDelay: '50ms' }}>
+                <div className="bg-[#f8faf9] dark:bg-gray-800/50 px-6 py-5 rounded-3xl flex flex-col justify-center">
+                    <div>
+                        <div className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">Sold Ratio</div>
+                        <div className="text-[32px] font-light font-display text-gray-900 dark:text-gray-100 flex items-baseline gap-2 leading-none tracking-tight">
+                            <AnimatedCounter value={Number(project!.percentSold) || 0} decimals={1} />%
+                            <span className="text-[11px] font-medium text-gray-400 tracking-wide">
+                                ({project!.soldUnits.toLocaleString()} / {project!.totalUnits.toLocaleString()})
+                            </span>
+                        </div>
                     </div>
                 </div>
 
                 {/* Sale Speed Card */}
-                <div className="bg-white/50 p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between backdrop-blur-sm">
-                    <div className="flex items-center gap-2 text-gray-400 mb-1">
-                        <TrendingUp className="w-4 h-4" />
-                        <span className="text-xs font-bold uppercase tracking-wider">Sale Speed</span>
-                    </div>
-                    <div className="flex items-end justify-between">
-                        <div>
-                            <div className="text-2xl font-bold text-indigo-600 leading-none mb-1">
-                                {(() => {
-                                    // Calculate sum of latest sale speed from all subunits
-                                    let totalSpeed = 0;
-                                    project!.subUnits.forEach(u => {
-                                        if (u.history) {
-                                            const keys = Object.keys(u.history)
-                                                .filter(k => /^H[12]\.\d+/.test(k) && k.toLowerCase().includes('(12m)'))
-                                                .sort((a, b) => {
-                                                    const parseKey = (k: string) => {
-                                                        const match = k.match(/^H([12])\.(\d+)/);
-                                                        if (!match) return { half: 0, year: 0 };
-                                                        return { half: parseInt(match[1]), year: parseInt(match[2]) };
-                                                    };
-                                                    const aVal = parseKey(a);
-                                                    const bVal = parseKey(b);
-                                                    if (bVal.year !== aVal.year) return bVal.year - aVal.year;
-                                                    return bVal.half - aVal.half;
-                                                });
-                                            if (keys.length > 0 && u.history[keys[0]] !== undefined) {
-                                                totalSpeed += u.history[keys[0]];
-                                            }
-                                        }
-                                    });
-                                    return totalSpeed.toFixed(2);
-                                })()}
+                <div className="bg-[#f8faf9] dark:bg-gray-800/50 px-6 py-5 rounded-3xl flex flex-col justify-center">
+                    <div>
+                        <div className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">Sale Speed</div>
+                        <div className="flex items-baseline gap-2">
+                            <div className="text-[32px] font-light font-display text-gray-900 dark:text-gray-100 leading-none tracking-tight">
+                                <AnimatedCounter value={Number(project!.saleSpeed) || 0} decimals={2} />
                             </div>
-                            <div className="text-[10px] text-gray-500 font-medium">Units/mo</div>
-                        </div>
-                        <div className="h-8 w-px bg-gray-200 mx-1"></div>
-                        <div className="text-right">
-                            <div className="text-lg font-bold text-gray-600 leading-none mb-1">{project!.saleSpeed}</div>
-                            <div className="text-[10px] text-gray-400 font-medium">All Time</div>
+                            <div className="text-[11px] text-gray-400 font-medium">Units/mo</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Units Table (Reordered & Grouped) */}
-            <div className="space-y-4">
-                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-                    <Home className="w-4 h-4 text-scbx" /> Unit Mix Analysis
-                </h3>
-                <div className="overflow-hidden rounded-2xl border border-gray-100 shadow-sm bg-white/50 backdrop-blur-sm">
+            <div className="animate-fadeInUp" style={{ animationFillMode: 'both', animationDelay: '150ms' }}>
+                <div className="flex items-center gap-2 mb-4 pl-2">
+                    <h2 className="text-lg font-medium text-gray-800 dark:text-gray-200 tracking-tight">Unit Mix Analysis</h2>
+                </div>
+                <div className="bg-[#f8faf9] dark:bg-gray-800/30 rounded-3xl overflow-hidden py-4">
+                <div className="overflow-hidden">
                     <div className="overflow-x-auto">
-                        <table className="w-full text-[11px] whitespace-nowrap">
+                        <table className="w-full text-xs whitespace-nowrap">
                             <thead>
                                 {/* Column Headers */}
-                                <tr className="bg-gray-50/80 border-b border-gray-200 text-gray-500 font-semibold uppercase">
-                                    <th className="px-3 py-3 text-left">Type</th>
+                                <tr className="bg-gray-50/80 dark:bg-gray-900/40 border-b border-gray-100 dark:border-gray-800 text-gray-400 dark:text-gray-500 text-[11px] font-medium tracking-wide">
+                                    <th className="px-4 py-3 text-left">Type</th>
                                     <th className="px-2 py-3 text-center">Launch</th>
-                                    <th className="px-3 py-3 text-right border-r border-gray-200/50">Price</th>
+                                    <th className="px-4 py-3 text-right">Price (MB)</th>
 
                                     <th className="px-2 py-3 text-right">Area</th>
-                                    <th className="px-2 py-3 text-right border-r border-gray-200/50">Land</th>
+                                    <th className="px-4 py-3 text-right">Land</th>
 
                                     <th className="px-2 py-3 text-right">Sale Speed</th>
                                     <th className="px-2 py-3 text-right">Speed</th>
-                                    <th className="px-2 py-3 text-right">Sold %</th>
+                                    <th className="px-4 py-3 text-right">Sold %</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
                                 {project!.subUnits.map((u, i) => (
-                                    <tr key={i} className="hover:bg-white/80 transition-colors">
+                                    <tr key={i} className="transition-all duration-300">
                                         {/* Group 1: Product Info */}
-                                        <td className="px-3 py-2.5 font-medium text-gray-800 max-w-[100px] truncate" title={u.type}>{u.type}</td>
-                                        <td className="px-2 py-2.5 text-center text-gray-500 font-mono">{u.launchDate}</td>
-                                        {/* Updated font-bold to font-medium */}
-                                        <td className="px-3 py-2.5 text-right text-gray-800 font-medium font-mono border-r border-gray-100">{u.priceStr}</td>
+                                        <td className="px-4 py-3.5 font-medium text-gray-800 dark:text-gray-200 max-w-[100px] truncate" title={u.type}>{u.type}</td>
+                                        <td className="px-2 py-3.5 text-center text-gray-800 dark:text-gray-200">{u.launchDate}</td>
+                                        <td className="px-4 py-3.5 text-right text-gray-800 dark:text-gray-200 font-medium">{u.priceStr.replace(/ ?MB$/, '')}</td>
 
                                         {/* Group 2: Size */}
-                                        <td className="px-2 py-2.5 text-right text-gray-600 font-mono">{u.usableArea}</td>
-                                        <td className="px-2 py-2.5 text-right text-gray-600 font-mono border-r border-gray-100">{u.landArea}</td>
+                                        <td className="px-2 py-3.5 text-right text-gray-800 dark:text-gray-200">{u.usableArea}</td>
+                                        <td className="px-4 py-3.5 text-right text-gray-800 dark:text-gray-200">{u.landArea}</td>
 
                                         {/* Group 3: Sales */}
-                                        <td className="px-2 py-2.5 text-right text-gray-600 font-mono">
+                                        <td className="px-2 py-3.5 text-right text-scbx font-bold">
                                             {(() => {
                                                 // Get most recent period key with (12m) - matching trend graph
                                                 if (u.history) {
@@ -179,11 +187,11 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                                                 return '-';
                                             })()}
                                         </td>
-                                        <td className="px-2 py-2.5 text-right text-gray-600 font-mono">{u.saleSpeed}</td>
-                                        <td className="px-2 py-2.5 text-right font-mono">
+                                        <td className="px-2 py-3.5 text-right text-gray-800 dark:text-gray-200 font-bold">{u.saleSpeed}</td>
+                                        <td className="px-4 py-3.5 text-right">
                                             <div className="flex flex-col items-end">
-                                                <span className="font-bold text-gray-800">{Math.round(u.percentSold)}%</span>
-                                                <span className="text-[9px] text-gray-400">({u.soldUnits}/{u.totalUnits})</span>
+                                                <span className="font-medium text-gray-900 dark:text-gray-100">{Math.round(u.percentSold)}%</span>
+                                                <span className="text-[10px] text-gray-400 dark:text-gray-500 font-sans tracking-wide">({u.soldUnits}/{u.totalUnits})</span>
                                             </div>
                                         </td>
                                     </tr>
@@ -193,49 +201,46 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                     </div>
                 </div>
             </div>
+        </div>
 
-            {/* Main Info - Updated Layout (Label Left, Value Right) */}
-            <div className="space-y-4">
-                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-                    <Info className="w-4 h-4 text-scbx" /> Project Information
-                </h3>
-                <div className="bg-white/50 rounded-2xl border border-gray-100 p-5 shadow-sm backdrop-blur-sm">
-                    <div className="grid grid-cols-[100px_1fr] gap-y-3 text-sm items-center">
+        </>
+    );
 
-                        <div className="text-gray-500 font-medium">Project ID</div>
-                        <div className="font-mono font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded w-fit text-xs">
-                            {project!.projectId}
-                        </div>
-
-                        <div className="h-px bg-gray-100 col-span-2 my-1"></div>
-
-                        <div className="text-gray-500 font-medium">Price Range</div>
-                        {/* Updated font-bold to font-medium */}
-                        <div className="font-medium text-gray-800">{project!.priceRange}</div>
-
-                        <div className="h-px bg-gray-100 col-span-2 my-1"></div>
-
-                        <div className="text-gray-500 font-medium">Launch Date</div>
-                        <div className="font-medium text-gray-800">{project!.subUnits[0]?.launchDate || '-'}</div>
-
-                        <div className="h-px bg-gray-100 col-span-2 my-1"></div>
-
-                        <div className="text-gray-500 font-medium">Developer</div>
-                        <div className="font-medium text-gray-800">{project!.developer}</div>
-
-                        <div className="h-px bg-gray-100 col-span-2 my-1"></div>
-
-                        <div className="text-gray-500 font-medium">Location Code</div>
-                        <div className="font-mono font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded w-fit text-xs">
-                            {project!.code}
-                        </div>
-
-                        <div className="h-px bg-gray-100 col-span-2 my-1"></div>
-
-                        <div className="text-gray-500 font-medium">GPS</div>
-                        <div className="font-mono text-gray-600 text-xs">
-                            {project!.lat.toFixed(5)}, {project!.lng.toFixed(5)}
-                        </div>
+    const renderProjectDetails = () => (
+        <div className="animate-fadeInUp" style={{ animationFillMode: 'both', animationDelay: '350ms' }}>
+            <div className="flex items-center gap-2 mb-4 pl-2">
+                <h2 className="text-lg font-medium text-gray-800 dark:text-gray-200 tracking-tight">Project Details</h2>
+            </div>
+            <div className="bg-[#f8faf9] dark:bg-gray-800/30 rounded-3xl overflow-hidden px-6 py-4">
+                <div className="flex flex-col text-xs">
+                    {/* Row */}
+                    <div className="flex justify-between items-center py-3.5 border-b border-gray-100 dark:border-gray-800/50">
+                        <span className="text-gray-500 dark:text-gray-400 font-medium">Project ID</span>
+                        <span className="font-medium text-gray-700 dark:text-gray-300 text-xs tracking-tight">{project!.projectId}</span>
+                    </div>
+                    
+                    {/* Row */}
+                    <div className="flex justify-between items-center py-3.5 border-b border-gray-100 dark:border-gray-800/50">
+                        <span className="text-gray-500 dark:text-gray-400 font-medium">Price Range</span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{project!.priceRange}</span>
+                    </div>
+                    
+                    {/* Row */}
+                    <div className="flex justify-between items-center py-3.5 border-b border-gray-100 dark:border-gray-800/50">
+                        <span className="text-gray-500 dark:text-gray-400 font-medium">Launch Date</span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{project!.subUnits[0]?.launchDate || '-'}</span>
+                    </div>
+                    
+                    {/* Row */}
+                    <div className="flex justify-between items-center py-3.5 border-b border-gray-100 dark:border-gray-800/50">
+                        <span className="text-gray-500 dark:text-gray-400 font-medium">Developer</span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100 max-w-[200px] truncate text-right">{project!.developer}</span>
+                    </div>
+                    
+                    {/* Row */}
+                    <div className="flex justify-between items-center py-3.5">
+                        <span className="text-gray-500 dark:text-gray-400 font-medium">Sub-market</span>
+                        <span className="font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded text-xs tracking-wider">{project!.code}</span>
                     </div>
                 </div>
             </div>
@@ -315,16 +320,11 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
         const chartW = width - padding.left - padding.right;
         const chartH = height - padding.top - padding.bottom;
 
-        const renderChart = (title: string, xLabels: string[]) => {
+        const renderChart = (xLabels: string[]) => {
             const currentSeriesData = seriesData2;
 
             return (
-                <div className="bg-white/50 p-5 rounded-3xl border border-gray-100 shadow-sm relative backdrop-blur-sm">
-                    <div className="flex items-start gap-2 mb-4">
-                        <div className="w-1 h-5 rounded-full bg-teal-500"></div>
-                        <h3 className="text-sm font-bold text-gray-900">{title}</h3>
-                    </div>
-
+                <div className="bg-[#f8faf9] dark:bg-gray-800/50 px-6 py-4 rounded-3xl">
                     <div className="relative">
                         <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible font-sans">
                             {/* Grid Lines (Y-Axis) */}
@@ -357,7 +357,7 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                                 const x = padding.left + (numLabels > 1 ? (i / (numLabels - 1)) * chartW : chartW / 2);
                                 return (
                                     <g key={i}>
-                                        <text x={x} y={height - padding.bottom + 15} fontSize="9" fill="#6b7280" textAnchor="middle">{lbl}</text>
+                                        <text x={x} y={height - padding.bottom + 15} fontSize="10" fill="#6b7280" textAnchor="middle">{lbl}</text>
                                         <line x1={x} y1={height - padding.bottom} x2={x} y2={height - padding.bottom + 5} stroke="#e5e7eb" strokeWidth="1" />
                                     </g>
                                 );
@@ -408,7 +408,7 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                         {/* Custom Tooltip */}
                         {hoveredPoint && (
                             <div
-                                className="absolute z-50 bg-gray-900 text-white text-[10px] rounded px-2 py-1.5 pointer-events-none shadow-xl transform -translate-x-1/2 -translate-y-full mt-[-8px]"
+                                className="absolute z-50 bg-gray-900 text-white text-[11px] rounded px-2 py-1.5 pointer-events-none shadow-xl transform -translate-x-1/2 -translate-y-full mt-[-8px]"
                                 style={{ left: hoveredPoint.x, top: hoveredPoint.y }}
                             >
                                 <div className="font-bold mb-1">{hoveredPoint.label}</div>
@@ -429,12 +429,12 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                     </div>
 
                     {/* Legend */}
-                    <div className="flex flex-wrap justify-center gap-3 mt-2 border-t border-gray-100 pt-3">
+                    <div className="flex flex-wrap justify-center gap-3 mt-2 border-t border-gray-100 dark:border-gray-700 pt-3">
                         {currentSeriesData.map(s => (
-                            <div key={s.type} className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-md border border-gray-100">
+                            <div key={s.type} className="flex items-center gap-1.5 bg-gray-100/80 dark:bg-gray-800 px-2 py-1 rounded-md">
                                 <div className="w-3 h-1 rounded-full" style={{ backgroundColor: s.color }}></div>
                                 <div className="w-2 h-2 rounded-full border border-white shadow-sm -ml-2" style={{ backgroundColor: s.color }}></div>
-                                <span className="text-[10px] font-bold text-gray-600">{s.type}</span>
+                                <span className="text-[11px] font-bold text-gray-600 dark:text-gray-400">{s.type}</span>
                             </div>
                         ))}
                     </div>
@@ -443,16 +443,16 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
         };
 
         return (
-            <div className="space-y-6 animate-fadeInUp pb-10">
-                <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                        <TrendingUp className="w-5 h-5 text-scbx" /> Sale Speed Trend Analysis
+            <div className="animate-fadeInUp" style={{ animationFillMode: 'both', animationDelay: '250ms' }}>
+                <div className="flex items-center justify-between mb-4 pl-2">
+                    <h2 className="text-lg font-medium text-gray-800 dark:text-gray-200 tracking-tight flex items-center gap-2">
+                        Sale Speed Trend Analysis
                     </h2>
                 </div>
 
-                {renderChart("Moving Average Trends (12M & 6M)", labels2)}
+                {renderChart(labels2)}
 
-                <div className="text-[10px] text-gray-400 text-center mt-4">
+                <div className="text-[11px] text-gray-400 text-center mt-4">
                     * Data based on 12-month moving average and current 6-month performance.
                 </div>
             </div>
@@ -462,10 +462,10 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
     return (
         <div
             className={`
-                absolute top-24 bottom-4 z-30
+                absolute top-3 bottom-3 z-30
                 ${positionClass}
                 w-[min(calc(100%-32px),700px)]
-                bg-white/75 backdrop-blur-2xl shadow-2xl rounded-3xl border border-white/50
+                bg-white dark:bg-gray-900 backdrop-blur-2xl shadow-2xl rounded-xl border border-gray-100/50 dark:border-gray-700/50 overflow-hidden
                 flex flex-col transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] origin-left
                 ${project ? 'opacity-100 translate-x-0 scale-100' : 'opacity-0 -translate-x-4 scale-95 pointer-events-none'}
             `}
@@ -473,48 +473,44 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
             {project && (
                 <div key={project.projectId} className="flex flex-col h-full w-full">
                     {/* Combined Header & Tabs Container */}
-                    <div className="bg-white/50 backdrop-blur-md rounded-t-3xl border-b border-gray-100 sticky top-0 z-10 shrink-0">
+                    <div className="bg-white dark:bg-gray-900 sticky top-0 z-10 shrink-0">
+                        
                         {/* Title Row */}
-                        <div className="flex items-start justify-between p-6 pb-4">
-                            <div className="flex-1 min-w-0 pr-4">
-                                <h2 className="text-xl font-bold text-gray-900 leading-tight truncate">{project.name}</h2>
+                        <div className="flex items-start justify-between px-7 pt-7 pb-4">
+                            <div className="flex-1 min-w-0 pr-4 mt-1">
+                                <h2 className="text-2xl font-medium text-gray-900 dark:text-white leading-tight truncate tracking-tight">{project.name}</h2>
+                                <button
+                                    onClick={handleCopyCoords}
+                                    className="flex items-center gap-1.5 mt-1.5 text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors group cursor-pointer"
+                                    title="Copy coordinates"
+                                >
+                                    <span className="font-mono tracking-wide">{project.lat.toFixed(5)}, {project.lng.toFixed(5)}</span>
+                                    {copied ? (
+                                        <Check className="w-3 h-3 text-green-500" />
+                                    ) : (
+                                        <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    )}
+                                    {copied && <span className="text-green-500 text-[10px] font-medium">Copied</span>}
+                                </button>
                             </div>
                             <button
                                 onClick={onClose}
-                                className="p-2 rounded-full hover:bg-gray-100/80 text-gray-500 hover:text-gray-900 transition-colors shrink-0 -mt-2 -mr-2"
+                                className="w-8 h-8 rounded-full bg-gray-100/80 dark:bg-gray-800/80 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white flex items-center justify-center transition-all mx-1 -mt-1"
                             >
-                                <X className="w-5 h-5" />
+                                <X className="w-4 h-4" />
                             </button>
                         </div>
 
-                        {/* Tabs Row */}
-                        <div className="px-6 flex gap-6">
-                            <button
-                                onClick={() => setActiveTab('overview')}
-                                className={`flex items-center gap-2 pb-3 text-sm font-bold transition-all relative ${activeTab === 'overview' ? 'text-scbx' : 'text-gray-400 hover:text-gray-600'
-                                    }`}
-                            >
-                                <LayoutDashboard className="w-4 h-4" /> Overview
-                                {activeTab === 'overview' && (
-                                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-scbx rounded-t-full animate-fadeInUp"></div>
-                                )}
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('trends')}
-                                className={`flex items-center gap-2 pb-3 text-sm font-bold transition-all relative ${activeTab === 'trends' ? 'text-scbx' : 'text-gray-400 hover:text-gray-600'
-                                    }`}
-                            >
-                                <TrendingUp className="w-4 h-4" /> Sale Speed Trend
-                                {activeTab === 'trends' && (
-                                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-scbx rounded-t-full animate-fadeInUp"></div>
-                                )}
-                            </button>
-                        </div>
+
                     </div>
 
                     {/* Content Area */}
-                    <div className="flex-1 overflow-y-auto p-6 custom-scrollbar relative">
-                        {activeTab === 'overview' ? renderOverview() : renderTrends()}
+                    <div className="flex-1 overflow-y-auto px-7 pt-2 pb-10 custom-scrollbar relative">
+                        <div className="flex flex-col gap-8">
+                            {renderOverview()}
+                            {renderTrends()}
+                            {renderProjectDetails()}
+                        </div>
                     </div>
                 </div>
             )}

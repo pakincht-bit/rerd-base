@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Project, SearchState, NearbyPlace } from '../types';
-import { ChevronDown, MapPin, CheckCircle2, TrendingUp, SearchX, Calendar, Building2, ShoppingBag, Stethoscope, GraduationCap, Star, Loader2, AlertCircle } from 'lucide-react';
+import { ChevronDown, TrendingUp, SearchX, Calendar, ShoppingBag, Stethoscope, GraduationCap, Star, Loader2, AlertCircle, Bed, MapPinOff } from 'lucide-react';
 
 interface ResultsPanelProps {
     projects: Project[];
@@ -10,9 +10,10 @@ interface ResultsPanelProps {
     onProjectClick: (p: Project) => void;
     onProjectHover: (id: string | null) => void;
     selectedProjectId: string | null;
-    // New props for lifting state and handling interactions
     onPlacesFetched?: (places: NearbyPlace[]) => void;
     onPlaceClick?: (place: NearbyPlace) => void;
+    activeTab: 'projects' | 'mall' | 'hospital' | 'school' | 'hotel';
+    onPlaceCounts?: (counts: { mall: number; hospital: number; school: number; hotel: number }) => void;
 }
 
 // Helper for Distance Calculation
@@ -45,16 +46,18 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
     onProjectHover,
     selectedProjectId,
     onPlacesFetched,
-    onPlaceClick
+    onPlaceClick,
+    activeTab,
+    onPlaceCounts
 }) => {
-    const [activeTab, setActiveTab] = useState<'projects' | 'mall' | 'hospital' | 'school'>('projects');
     const [placeSortBy, setPlaceSortBy] = useState<'distance' | 'rating'>('distance');
 
     // Data State
     const [placesData, setPlacesData] = useState<Record<string, NearbyPlace[]>>({
         mall: [],
         hospital: [],
-        school: []
+        school: [],
+        hotel: []
     });
     const [isLoading, setIsLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -91,7 +94,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
 
                 setIsLoading(true);
                 setErrorMsg(null);
-                setPlacesData({ mall: [], hospital: [], school: [] }); // Clear previous data
+                setPlacesData({ mall: [], hospital: [], school: [], hotel: [] }); // Clear previous data
 
                 // Notify parent to clear map markers temporarily
                 if (onPlacesFetched) onPlacesFetched([]);
@@ -114,6 +117,10 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                           node["amenity"~"school|university|college",i](around:${radiusMeters},${lat},${lng});
                           way["amenity"~"school|university|college",i](around:${radiusMeters},${lat},${lng});
                           relation["amenity"~"school|university|college",i](around:${radiusMeters},${lat},${lng});
+                          
+                          node["tourism"~"hotel|hostel|resort|motel|guest_house",i](around:${radiusMeters},${lat},${lng});
+                          way["tourism"~"hotel|hostel|resort|motel|guest_house",i](around:${radiusMeters},${lat},${lng});
+                          relation["tourism"~"hotel|hostel|resort|motel|guest_house",i](around:${radiusMeters},${lat},${lng});
                         );
                         out body center;
                     `;
@@ -159,12 +166,14 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                     const newPlaces: Record<string, NearbyPlace[]> = {
                         mall: [],
                         hospital: [],
-                        school: []
+                        school: [],
+                        hotel: []
                     };
 
                     const MALL_REGEX = /mall|department_store/i;
                     const HOSPITAL_REGEX = /hospital/i;
                     const SCHOOL_REGEX = /school|university|college/i;
+                    const HOTEL_REGEX = /hotel|hostel|resort|motel|guest_house/i;
 
                     const allPlacesFlat: NearbyPlace[] = [];
                     const seenIds = new Set<string>();
@@ -190,12 +199,13 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                             const dist = calculateDistance(lat, lng, pLat, pLng);
 
                             // Determine Type
-                            let type: 'mall' | 'hospital' | 'school' | null = null;
+                            let type: 'mall' | 'hospital' | 'school' | 'hotel' | null = null;
 
                             // Priority check
                             if (tags.shop && MALL_REGEX.test(tags.shop)) type = 'mall';
                             else if (tags.amenity && HOSPITAL_REGEX.test(tags.amenity)) type = 'hospital';
                             else if (tags.amenity && SCHOOL_REGEX.test(tags.amenity)) type = 'school';
+                            else if (tags.tourism && HOTEL_REGEX.test(tags.tourism)) type = 'hotel';
 
                             if (!type) return;
 
@@ -281,66 +291,34 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
         const items = placesData[activeTab] || [];
         return [...items].sort((a, b) => {
             if (placeSortBy === 'rating') {
-                return b.rating - a.rating; // Descending
+                return b.rating - a.rating;
             }
-            return a.distance - b.distance; // Ascending
+            return a.distance - b.distance;
         });
     }, [placesData, activeTab, placeSortBy]);
 
-    const tabs = [
-        { id: 'projects', label: 'Projects', icon: Building2, count: totalCount },
-        { id: 'mall', label: 'Malls', icon: ShoppingBag, count: placesData.mall.length || 0 },
-        { id: 'hospital', label: 'Hospitals', icon: Stethoscope, count: placesData.hospital.length || 0 },
-        { id: 'school', label: 'Schools', icon: GraduationCap, count: placesData.school.length || 0 },
-    ] as const;
+    // Report place counts to parent for sidebar badges
+    useEffect(() => {
+        if (onPlaceCounts) {
+            onPlaceCounts({
+                mall: placesData.mall.length,
+                hospital: placesData.hospital.length,
+                school: placesData.school.length,
+                hotel: placesData.hotel.length,
+            });
+        }
+    }, [placesData, onPlaceCounts]);
 
     return (
-        <div className="w-full h-full flex flex-col bg-transparent">
-            {/* Header */}
-            <div className="border-b border-gray-100/50 bg-white/60 backdrop-blur-md sticky top-0 z-20 flex flex-col rounded-t-3xl shadow-sm">
-
-                {/* Tab Navigation */}
-                <div className="flex items-center px-2 pt-2">
-                    {tabs.map(tab => {
-                        const isTabLoading = isLoading && tab.id !== 'projects';
-                        return (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id as any)}
-                                className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 relative transition-all duration-300 ${activeTab === tab.id ? 'text-scbx' : 'text-gray-400 hover:text-gray-600'
-                                    }`}
-                            >
-                                <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-                                <span className="text-[10px] font-bold uppercase tracking-wide">{tab.label}</span>
-
-                                {/* Active Indicator */}
-                                {activeTab === tab.id && (
-                                    <div className="absolute bottom-0 w-8 h-1 bg-scbx rounded-t-full"></div>
-                                )}
-
-                                {/* Badge */}
-                                <span className={`absolute top-2 right-2 min-w-[16px] h-4 px-1 rounded-full text-[9px] flex items-center justify-center font-bold transition-all ${activeTab === tab.id ? 'bg-scbx text-white' : 'bg-gray-200 text-gray-500'
-                                    } ${isTabLoading ? 'bg-gray-100' : ''}`}>
-                                    {isTabLoading ? (
-                                        <Loader2 className="w-2.5 h-2.5 animate-spin text-gray-400" />
-                                    ) : (
-                                        tab.id === 'projects'
-                                            ? (tab.count > 99 ? '99+' : tab.count)
-                                            : (tab.count > 30 ? '30+' : tab.count)
-                                    )}
-                                </span>
-                            </button>
-                        );
-                    })}
-                </div>
-
-                {/* Sub-Header (Sort controls) */}
-                <div className="px-5 pb-3 pt-3 animate-fadeInUp flex flex-row items-center justify-between gap-2">
-                    <div className="flex items-baseline gap-1">
-                        <span className="text-xl font-bold text-gray-900">
+        <div className="w-full h-full flex flex-col bg-white dark:bg-gray-900">
+            {/* Header — Sort controls only (tabs moved to IconSidebar) */}
+            <div className="border-b border-gray-100/50 dark:border-gray-700/50 bg-white dark:bg-gray-900 sticky top-0 z-20 flex flex-col">
+                <div className="px-5 pb-3 pt-4 flex flex-row items-center justify-between gap-2">
+                    <div className="flex items-baseline gap-1.5">
+                        <span className="text-xl font-medium text-gray-900 dark:text-gray-100 tracking-tight">
                             {activeTab === 'projects' ? totalCount : sortedPlaces.length}
                         </span>
-                        <span className="text-sm font-medium text-gray-500">
+                        <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
                             {activeTab === 'projects' ? 'projects found' : 'places found'}
                         </span>
                     </div>
@@ -350,7 +328,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                             <select
                                 value={searchState.sortBy}
                                 onChange={(e) => setSearchState(prev => ({ ...prev, sortBy: e.target.value as any }))}
-                                className="w-full appearance-none pl-3 pr-8 h-8 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-black/5 hover:bg-gray-50 hover:border-gray-300 transition shadow-sm cursor-pointer"
+                                className="w-full appearance-none pl-3 pr-8 h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-bold text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-black/5 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition shadow-sm cursor-pointer"
                             >
                                 <option value="distance">Sort: Distance</option>
                                 <option value="launchDate">Sort: Newest</option>
@@ -364,7 +342,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                             <select
                                 value={placeSortBy}
                                 onChange={(e) => setPlaceSortBy(e.target.value as 'distance' | 'rating')}
-                                className="w-full appearance-none pl-3 pr-8 h-8 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-black/5 hover:bg-gray-50 hover:border-gray-300 transition shadow-sm cursor-pointer"
+                                className="w-full appearance-none pl-3 pr-8 h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-bold text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-black/5 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition shadow-sm cursor-pointer"
                             >
                                 <option value="distance">Sort: Distance</option>
                                 <option value="rating">Sort: Score</option>
@@ -376,14 +354,14 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
             </div>
 
             {/* Content List */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+            <div className="relative flex-1 overflow-hidden">
+                <div className="h-full overflow-y-auto overflow-x-hidden custom-scrollbar">
 
                 {/* PROJECTS TAB */}
                 {activeTab === 'projects' && (
-                    <div className="grid grid-cols-1 gap-3 animate-fadeInUp">
+                    <div className="animate-fadeInUp pb-36">
                         {projects.map((p, idx) => {
                             const isSelected = selectedProjectId === p.projectId;
-                            const uniqueTypes = [...new Set(p.subUnits.map(u => u.type))];
                             const launchDate = p.subUnits.map(u => u.launchDate).filter(d => d && d !== '-').sort()[0] || '-';
                             const unitLeft = Math.round(p.totalUnits - p.soldUnits);
 
@@ -417,63 +395,80 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                     onClick={() => onProjectClick(p)}
                                     onMouseEnter={() => onProjectHover && onProjectHover(p.projectId)}
                                     onMouseLeave={() => onProjectHover && onProjectHover(null)}
-                                    className={`group relative flex items-start gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-200 backdrop-blur-sm
+                                    className={`group relative flex items-start gap-3.5 px-3 py-3.5 cursor-pointer transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)]
                                         ${isSelected
-                                            ? 'bg-white shadow-lg scale-[1.01] border-l-4 border-scbx ring-1 ring-gray-100'
-                                            : 'bg-white/60 border border-white/50 hover:bg-white hover:scale-[1.01] hover:shadow-lg'
+                                            ? 'bg-scbx/[0.04] dark:bg-scbx/[0.08]'
+                                            : 'hover:bg-gray-50/70 dark:hover:bg-gray-800/30 hover:translate-x-0.5'
                                         }
                                     `}
                                 >
-                                    <div className="flex flex-col items-center justify-start pt-0.5 gap-1">
-                                        <span className={`text-[10px] font-bold px-1.5 py-1 rounded-md shadow-sm min-w-[24px] text-center transition-colors
-                                            ${isSelected ? 'bg-scbx text-white' : 'bg-gray-800 text-white'}
+                                    {/* Selection Indicator */}
+                                    <div className={`absolute left-0 top-2 bottom-2 w-[3px] bg-gradient-to-b from-scbx to-scbx-400 rounded-r-full transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] origin-center ${isSelected ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`} />
+
+                                    {/* Editorial Index */}
+                                    <div className="flex flex-col items-center justify-start pt-0.5 gap-0.5 min-w-[28px]">
+                                        <span className={`font-mono text-xs font-medium tabular-nums transition-colors
+                                            ${isSelected ? 'text-scbx' : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-800 dark:group-hover:text-gray-200'}
                                         `}>
-                                            {idx + 1}
+                                            {String(idx + 1).padStart(2, '0')}
                                         </span>
-                                        <span className="text-[10px] font-bold text-gray-400">
+                                        <span className="font-mono text-[8px] font-medium text-gray-300 dark:text-gray-600 tracking-wider uppercase">
                                             {p.code}
                                         </span>
                                     </div>
 
+                                    {/* Content */}
                                     <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                                        {/* Title + Developer */}
                                         <div>
-                                            <h3 className={`font-bold text-sm truncate transition-colors ${isSelected ? 'text-scbx' : 'text-gray-800 group-hover:text-scbx'}`} title={p.name}>
+                                            <h3 className={`font-medium text-[13px] leading-tight truncate tracking-tight transition-colors ${isSelected ? 'text-scbx' : 'text-gray-900 dark:text-gray-100 group-hover:text-scbx'}`} title={p.name}>
                                                 {p.name}
                                             </h3>
-                                            <div className="text-[10px] text-gray-500 truncate mt-0.5">{p.developer}</div>
+                                            <div className="text-[9px] text-gray-400 dark:text-gray-500 truncate mt-0.5 uppercase tracking-widest font-medium">{p.developer}</div>
                                         </div>
 
-                                        {/* Types Row */}
-                                        <div className="flex items-center gap-1.5 overflow-hidden mt-0.5">
-                                            {uniqueTypes.slice(0, 3).map(t => (
-                                                <span key={t} className="bg-white/60 text-gray-500 text-[9px] px-1.5 py-0.5 rounded border border-gray-100 truncate max-w-[120px]">
-                                                    {t}
-                                                </span>
-                                            ))}
+                                        {/* Mini Progress Bar */}
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <div className="w-full h-[3px] bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-gradient-to-r from-scbx to-scbx-400 rounded-full transition-all duration-500"
+                                                    style={{ width: `${Math.min(parseFloat(p.percentSold), 100)}%` }}
+                                                />
+                                            </div>
+                                            <span className="text-[9px] font-bold font-mono text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap min-w-[28px] text-right">
+                                                {Math.round(parseFloat(p.percentSold))}%
+                                            </span>
                                         </div>
 
-                                        {/* Stats Row */}
-                                        <div className="flex items-center gap-1 shrink-0 flex-wrap">
+                                        {/* Inline Data Row */}
+                                        <div className="flex items-center gap-0 text-[9px] font-mono text-gray-400 dark:text-gray-500 flex-wrap">
                                             {launchDate !== '-' && (
-                                                <div className="flex items-center gap-0.5 text-[9px] text-gray-600 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100/50" title="Launch Date">
-                                                    <Calendar size={8} /> {launchDate}
-                                                </div>
+                                                <>
+                                                    <span className="flex items-center gap-0.5 text-gray-500 dark:text-gray-400">
+                                                        <Calendar size={8} className="text-gray-400 dark:text-gray-500" />
+                                                        {launchDate}
+                                                    </span>
+                                                    <span className="mx-1.5 text-gray-300 dark:text-gray-700">·</span>
+                                                </>
                                             )}
-                                            <div className="flex items-center gap-0.5 text-[9px] text-green-700 bg-green-50/50 px-1.5 py-0.5 rounded border border-green-100/50">
-                                                <CheckCircle2 size={8} /> {Math.round(parseFloat(p.percentSold))}% ({unitLeft.toLocaleString()} Left)
-                                            </div>
-                                            <div className="flex items-center gap-0.5 text-[9px] text-indigo-600 bg-indigo-50/50 px-1.5 py-0.5 rounded border border-indigo-100/50" title="Latest Sale Speed">
-                                                <TrendingUp size={8} /> {p.saleSpeed6m}
-                                            </div>
+                                            <span className="text-gray-500 dark:text-gray-400 tabular-nums">
+                                                {unitLeft.toLocaleString()} left
+                                            </span>
+                                            <span className="mx-1.5 text-gray-300 dark:text-gray-700">·</span>
+                                            <span className="flex items-center gap-0.5 tabular-nums">
+                                                <TrendingUp size={8} className="text-scbx" />
+                                                <span className="text-gray-500 dark:text-gray-400">{p.saleSpeed6m}</span>
+                                            </span>
                                         </div>
                                     </div>
 
-                                    <div className="text-right min-w-fit flex flex-col items-end justify-start gap-0.5 pt-0.5">
-                                        <div className="font-bold text-xs text-gray-900 whitespace-nowrap">
+                                    {/* Price & Distance */}
+                                    <div className="text-right w-[100px] shrink-0 flex flex-col items-end justify-start gap-1 pt-0.5">
+                                        <div className="font-medium text-[11px] text-gray-600 dark:text-gray-400 whitespace-nowrap tracking-tight">
                                             {displayPrice}
                                         </div>
                                         {searchState.searchMode === 'location' && (
-                                            <div className="text-[10px] text-gray-400 font-medium">
+                                            <div className="text-[9px] text-gray-400 dark:text-gray-500 font-mono font-bold tracking-wider uppercase tabular-nums">
                                                 {p.distance?.toFixed(1)} km
                                             </div>
                                         )}
@@ -482,12 +477,18 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                             );
                         })}
                         {projects.length === 0 && (
-                            <div className="flex flex-col items-center justify-center py-20 text-center">
-                                <div className="bg-white/40 p-5 rounded-full mb-4 border border-white/50 shadow-sm">
-                                    <SearchX className="w-8 h-8 text-gray-400" />
+                            <div className="flex flex-col items-center justify-center py-24 px-6 text-center animate-fadeIn group">
+                                <div className="relative mb-6">
+                                    <div className="absolute inset-0 bg-scbx dark:bg-emerald-500 rounded-full blur-2xl opacity-20 group-hover:opacity-30 transition-opacity duration-700"></div>
+                                    <div className="bg-white dark:bg-gray-800 p-5 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden flex items-center justify-center min-w-[80px] min-h-[80px]">
+                                        <div className="absolute inset-0 bg-gradient-to-br from-gray-50 to-transparent dark:from-gray-700 dark:to-transparent opacity-50"></div>
+                                        <SearchX className="w-10 h-10 text-gray-400 dark:text-gray-500 relative z-10 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-3" strokeWidth={1.5} />
+                                    </div>
                                 </div>
-                                <h3 className="text-lg font-bold text-gray-700">No projects found</h3>
-                                <p className="text-gray-500 text-sm mt-1">Try extending the radius or changing filters.</p>
+                                <h3 className="text-[13px] font-extrabold text-gray-800 dark:text-gray-100 uppercase tracking-widest mb-1.5">No Properties Found</h3>
+                                <p className="text-gray-400 dark:text-gray-500 text-[11px] leading-relaxed max-w-[240px] font-medium">
+                                    We couldn't find any projects matching your current filters. Try expanding your search area or removing some filters.
+                                </p>
                             </div>
                         )}
                     </div>
@@ -514,12 +515,12 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
 
                 {/* OTHER TABS (Mall, Hospital, School) */}
                 {activeTab !== 'projects' && (!isLoading || placesData[activeTab].length > 0) && !errorMsg && (
-                    <div className="space-y-3 animate-fadeInUp">
+                    <div className="animate-fadeInUp pb-36">
                         {/* Disclaimer Note */}
-                        <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 flex items-center gap-2 mb-2">
+                        <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-100 dark:border-amber-800/50 px-4 py-2 flex items-center gap-2">
                             <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                            <div className="text-[10px] text-amber-700 font-medium">
-                                <strong>Note:</strong> ผลลัพท์ที่ได้อาจจะไม่อัพเดท ให้ไปเช็คความถูกต้องเองเพิ่มเติม
+                            <div className="text-[10px] text-amber-800 dark:text-amber-400 font-medium">
+                                ข้อมูลในระบบอาจไม่ใช่ข้อมูลล่าสุด โปรดตรวจสอบความถูกต้องจากสถานที่จริงหรือแหล่งข้อมูลอ้างอิงอีกครั้ง
                             </div>
                         </div>
 
@@ -527,39 +528,67 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                             <div
                                 key={place.id}
                                 onClick={() => onPlaceClick && onPlaceClick(place)}
-                                className="bg-white/60 border border-white/50 p-4 rounded-2xl flex items-center gap-3 transition-all duration-200 backdrop-blur-sm cursor-pointer group hover:bg-white hover:shadow-lg hover:scale-[1.01]"
+                                className="group relative flex items-start gap-3.5 px-3 py-3.5 cursor-pointer transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] hover:bg-gray-50/70 dark:hover:bg-gray-800/30 hover:translate-x-0.5"
                             >
-                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:scale-110 ${activeTab === 'mall' ? 'bg-orange-100 text-orange-600' :
-                                    activeTab === 'hospital' ? 'bg-red-100 text-red-600' :
-                                        'bg-blue-100 text-blue-600'
-                                    }`}>
-                                    {activeTab === 'mall' ? <ShoppingBag size={20} /> :
-                                        activeTab === 'hospital' ? <Stethoscope size={20} /> :
-                                            <GraduationCap size={20} />}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <h3 className="font-bold text-gray-800 text-sm truncate group-hover:text-scbx transition-colors">{place.name}</h3>
-                                    <div className="text-[10px] text-gray-500 mt-0.5 truncate">{place.address}</div>
-                                </div>
-                                <div className="text-right shrink-0">
-                                    <div className="flex items-center justify-end gap-1 text-yellow-500 mb-1">
-                                        <Star size={10} fill="currentColor" />
-                                        <span className="text-xs font-bold text-gray-700">{place.rating.toFixed(1)}</span>
+                                {/* Place Icon */}
+                                <div className="flex flex-col items-center justify-start pt-1 min-w-[28px]">
+                                    <div className={`flex items-center justify-center transition-colors opacity-80 group-hover:opacity-100 group-hover:scale-110 duration-300
+                                        ${activeTab === 'mall' ? 'text-orange-500' :
+                                            activeTab === 'hospital' ? 'text-red-500' :
+                                                activeTab === 'school' ? 'text-blue-500' :
+                                                    'text-purple-500'
+                                        }`}>
+                                        {activeTab === 'mall' ? <ShoppingBag size={16} strokeWidth={2} /> :
+                                            activeTab === 'hospital' ? <Stethoscope size={16} strokeWidth={2} /> :
+                                                activeTab === 'school' ? <GraduationCap size={16} strokeWidth={2} /> :
+                                                    <Bed size={16} strokeWidth={2} />}
                                     </div>
-                                    <div className="text-[10px] font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full flex items-center gap-1 justify-end">
-                                        <MapPin size={8} /> {place.distance.toFixed(1)} km
+                                </div>
+
+                                {/* Content */}
+                                <div className="flex-1 min-w-0 flex flex-col gap-1.5 pt-0.5">
+                                    <div>
+                                        <h3 className="font-medium text-[13px] leading-tight truncate tracking-tight transition-colors text-gray-900 dark:text-gray-100 group-hover:text-scbx group-hover:dark:text-scbx" title={place.name}>
+                                            {place.name}
+                                        </h3>
+                                        <div className="text-[9px] text-gray-400 dark:text-gray-500 truncate mt-0.5 tracking-wide">{place.address}</div>
+                                    </div>
+                                </div>
+
+                                {/* Score & Distance */}
+                                <div className="text-right w-[80px] shrink-0 flex flex-col items-end justify-start gap-1 pt-0.5">
+                                    <div className="flex items-center gap-1 font-medium text-[11px] text-gray-600 dark:text-gray-400 whitespace-nowrap tracking-tight">
+                                        <Star size={10} fill="currentColor" className="text-yellow-500 dark:text-yellow-600" />
+                                        <span>{place.rating.toFixed(1)}</span>
+                                    </div>
+                                    <div className="text-[9px] text-gray-400 dark:text-gray-500 font-mono font-bold tracking-wider uppercase tabular-nums">
+                                        {place.distance.toFixed(1)} km
                                     </div>
                                 </div>
                             </div>
                         ))}
                         {sortedPlaces.length === 0 && (
-                            <div className="text-center py-10 text-gray-400 text-sm">
-                                No locations found in this area.
+                            <div className="flex flex-col items-center justify-center py-24 px-6 text-center animate-fadeIn group">
+                                <div className="relative mb-6">
+                                    <div className="absolute inset-0 bg-gray-400 dark:bg-gray-600 rounded-full blur-2xl opacity-20 group-hover:opacity-30 transition-opacity duration-700"></div>
+                                    <div className="bg-white dark:bg-gray-800 p-5 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden flex items-center justify-center min-w-[80px] min-h-[80px]">
+                                        <div className="absolute inset-0 bg-gradient-to-br from-gray-50 to-transparent dark:from-gray-700 dark:to-transparent opacity-50"></div>
+                                        <MapPinOff className="w-10 h-10 text-gray-400 dark:text-gray-500 relative z-10 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3" strokeWidth={1.5} />
+                                    </div>
+                                </div>
+                                <h3 className="text-[13px] font-extrabold text-gray-800 dark:text-gray-100 uppercase tracking-widest mb-1.5">No Places Found</h3>
+                                <p className="text-gray-400 dark:text-gray-500 text-[11px] leading-relaxed max-w-[240px] font-medium">
+                                    We couldn't find any {activeTab === 'mall' ? 'malls' : activeTab === 'hospital' ? 'hospitals' : activeTab === 'school' ? 'schools' : 'hotels'} in this area. Try selecting a different location.
+                                </p>
                             </div>
                         )}
                     </div>
                 )}
 
+                </div>
+
+                {/* Bottom fade gradient */}
+                <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white via-white/80 dark:from-gray-900 dark:via-gray-900/80 to-transparent pointer-events-none z-10" />
             </div>
         </div>
     );

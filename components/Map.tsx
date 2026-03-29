@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Circle, useMap, Tooltip } from 'react-leaflet';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { MapContainer, TileLayer, Marker, Circle, Polyline, useMap, Tooltip, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { NearbyPlace, Project } from '../types';
-import { Layers, Building2, ShoppingBag, Stethoscope, GraduationCap, Check, Eye, EyeOff, LocateFixed } from 'lucide-react';
+
 
 // Fix Leaflet's default icon issue with Webpack/Vite/ESM
 const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
@@ -108,6 +108,10 @@ interface MapProps {
     activeProject: Project | null;
     nearbyPlaces?: NearbyPlace[];
     activePlace?: NearbyPlace | null;
+    visibleLayers: { projects: boolean; mall: boolean; hospital: boolean; school: boolean; hotel: boolean };
+    rulerActive: boolean;
+    rulerPoints: { a: [number, number] | null; b: [number, number] | null };
+    setRulerPoints: React.Dispatch<React.SetStateAction<{ a: [number, number] | null; b: [number, number] | null }>>;
 }
 
 // Component to handle map movements
@@ -120,14 +124,7 @@ const MapUpdater: React.FC<{ center: [number, number]; zoom: number }> = ({ cent
     return null;
 };
 
-// Component to capture map instance
-const MapRegister: React.FC<{ setMap: (map: L.Map) => void }> = ({ setMap }) => {
-    const map = useMap();
-    useEffect(() => {
-        setMap(map);
-    }, [map, setMap]);
-    return null;
-};
+
 
 // Component to fix rendering issues by invalidating size on resize
 const MapResizer: React.FC = () => {
@@ -171,11 +168,63 @@ const ProjectFlyTo: React.FC<{ project: Project | null; place: NearbyPlace | nul
     return null;
 };
 
+// Right-click event listener (renders nothing, just captures contextmenu events)
+const MapContextMenuListener: React.FC<{
+    onContextMenu: (data: { lat: number; lng: number; x: number; y: number }) => void;
+    onClose: () => void;
+}> = ({ onContextMenu, onClose }) => {
+    const map = useMap();
+
+    useEffect(() => {
+        map.on('movestart', onClose);
+        map.on('zoomstart', onClose);
+        map.on('click', onClose);
+        return () => {
+            map.off('movestart', onClose);
+            map.off('zoomstart', onClose);
+            map.off('click', onClose);
+        };
+    }, [map, onClose]);
+
+    useMapEvents({
+        contextmenu(e) {
+            e.originalEvent.preventDefault();
+            const point = map.latLngToContainerPoint(e.latlng);
+            onContextMenu({ lat: e.latlng.lat, lng: e.latlng.lng, x: point.x, y: point.y });
+        },
+    });
+
+    return null;
+};
+
+// Ruler click handler – captures map clicks to place point A then B
+const RulerClickHandler: React.FC<{
+    rulerPoints: { a: [number, number] | null; b: [number, number] | null };
+    setRulerPoints: React.Dispatch<React.SetStateAction<{ a: [number, number] | null; b: [number, number] | null }>>;
+}> = ({ rulerPoints, setRulerPoints }) => {
+    useMapEvents({
+        click(e) {
+            const point: [number, number] = [e.latlng.lat, e.latlng.lng];
+            if (!rulerPoints.a) {
+                // Place point A
+                setRulerPoints({ a: point, b: null });
+            } else if (!rulerPoints.b) {
+                // Place point B
+                setRulerPoints(prev => ({ ...prev, b: point }));
+            } else {
+                // Reset and start new measurement
+                setRulerPoints({ a: point, b: null });
+            }
+        },
+    });
+    return null;
+};
+
 const createUserIcon = () => {
     const html = `
         <div class="relative flex items-center justify-center w-8 h-8 -ml-4 -mt-4">
-            <div class="absolute w-full h-full bg-[#00A950] rounded-full opacity-30 animate-ping"></div>
-            <div class="relative w-full h-full bg-[#00A950] rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white">
+            <div class="absolute w-full h-full bg-[#1B333C] rounded-full opacity-30 animate-ping"></div>
+            <div class="relative w-full h-full bg-[#1B333C] rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
             </div>
         </div>`;
@@ -196,10 +245,14 @@ const createPlaceIcon = (type: string, isHovered: boolean) => {
         bgColor = '#fee2e2'; // red-100
         textColor = '#dc2626'; // red-600
         iconSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2a2 2 0 0 0-2 2v2H4v6h5v6h6v-6h5V6h-5V4a2 2 0 0 0-2-2Z"/></svg>`;
-    } else { // school
+    } else if (type === 'school') { // school
         bgColor = '#dbeafe'; // blue-100
         textColor = '#2563eb'; // blue-600
         iconSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>`;
+    } else { // hotel
+        bgColor = '#f3e8ff'; // purple-100
+        textColor = '#9333ea'; // purple-600
+        iconSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>`;
     }
 
     const scaleClass = isHovered ? "scale-125 z-50 ring-2 ring-white" : "scale-100";
@@ -247,16 +300,13 @@ const MapComponent: React.FC<MapProps> = ({
     hoveredProjectId, 
     activeProject,
     nearbyPlaces = [],
-    activePlace
+    activePlace,
+    visibleLayers,
+    rulerActive,
+    rulerPoints,
+    setRulerPoints
 }) => {
-    const [visibleLayers, setVisibleLayers] = useState({
-        projects: true,
-        mall: true,
-        hospital: true,
-        school: true
-    });
-    const [isLayerControlOpen, setIsLayerControlOpen] = useState(false);
-    const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
+
 
     // Generate colors for each code
     const codeColorMap = useMemo(() => {
@@ -286,44 +336,53 @@ const MapComponent: React.FC<MapProps> = ({
         });
     }, [projects, visibleLayers.projects]);
 
-    const toggleLayer = (layer: keyof typeof visibleLayers) => {
-        setVisibleLayers(prev => ({ ...prev, [layer]: !prev[layer] }));
-    };
 
-    const handleRecenter = () => {
-        if (mapInstance && searchMode === 'location') {
-            // Explicitly calculate bounds based on radius (km) to ensure robust centering
-            const lat = center[0];
-            const lng = center[1];
-            // 1 deg lat ~= 111.32 km
-            const latOffset = radius / 111.32;
-            // 1 deg lng ~= 111.32 * cos(lat) km
-            const lngOffset = radius / (111.32 * Math.cos(lat * (Math.PI / 180)));
-            
-            const southWest = L.latLng(lat - latOffset, lng - lngOffset);
-            const northEast = L.latLng(lat + latOffset, lng + lngOffset);
-            const bounds = L.latLngBounds(southWest, northEast);
+    // Context menu state (lifted out of MapContainer so popup renders outside Leaflet)
+    const [ctxMenu, setCtxMenu] = useState<{ lat: number; lng: number; x: number; y: number } | null>(null);
+    const [ctxCopied, setCtxCopied] = useState(false);
+    const closeCtxMenu = useCallback(() => setCtxMenu(null), []);
+    const handleCtxOpen = useCallback((data: { lat: number; lng: number; x: number; y: number }) => {
+        setCtxMenu(data);
+        setCtxCopied(false);
+    }, []);
+    const handleCtxCopy = useCallback(() => {
+        if (!ctxMenu) return;
+        const text = `${ctxMenu.lat.toFixed(6)}, ${ctxMenu.lng.toFixed(6)}`;
+        navigator.clipboard.writeText(text).then(() => {
+            setCtxCopied(true);
+            setTimeout(() => setCtxMenu(null), 800);
+        });
+    }, [ctxMenu]);
 
-            mapInstance.flyToBounds(bounds, { 
-                animate: true, 
-                duration: 1.0, 
-                padding: [50, 50] // Padding to ensure the circle isn't touching the edges
-            });
-        }
-    };
+    // Haversine for ruler
+    const rulerDistance = useMemo(() => {
+        if (!rulerPoints.a || !rulerPoints.b) return null;
+        const [lat1, lon1] = rulerPoints.a;
+        const [lat2, lon2] = rulerPoints.b;
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }, [rulerPoints]);
+
+
 
     return (
-        <div className="relative w-full h-full">
+        <div className={`relative w-full h-full ${rulerActive ? 'ruler-active-cursor' : ''}`}>
             <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%', zIndex: 0 }} zoomControl={false}>
                 <TileLayer
-                    attribution='&copy; OpenStreetMap contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
                 />
                 
                 <MapUpdater center={center} zoom={searchMode === 'code' ? 12 : 14} />
-                <MapRegister setMap={setMapInstance} />
+
                 <MapResizer />
                 <ProjectFlyTo project={activeProject} place={activePlace} />
+                <MapContextMenuListener onContextMenu={handleCtxOpen} onClose={closeCtxMenu} />
 
                 {searchMode === 'location' && (
                     <>
@@ -331,7 +390,7 @@ const MapComponent: React.FC<MapProps> = ({
                         <Circle 
                             center={center} 
                             radius={radius * 1000} 
-                            pathOptions={{ color: '#222', fillColor: '#222', fillOpacity: 0.05, weight: 1, dashArray: '5, 5' }} 
+                            pathOptions={{ color: '#222', fillColor: '#222', fillOpacity: 0.05, weight: 1.5, dashArray: '5, 5' }} 
                         />
                     </>
                 )}
@@ -362,11 +421,20 @@ const MapComponent: React.FC<MapProps> = ({
                     const isHovered = hoveredProjectId === p.projectId;
                     const colors = getCodeColor(p.code);
 
+                    // In location mode, skip project marker if it overlaps with center pin
+                    if (searchMode === 'location' &&
+                        p.lat.toFixed(4) === center[0].toFixed(4) &&
+                        p.lng.toFixed(4) === center[1].toFixed(4)) {
+                        return null;
+                    }
+
+                    const icon = createProjectIcon(idx, isHovered, colors.bg, colors.text);
+
                     return (
                         <Marker 
                             key={p.projectId} 
                             position={[p.lat, p.lng]} 
-                            icon={createProjectIcon(idx, isHovered, colors.bg, colors.text)}
+                            icon={icon}
                             zIndexOffset={isHovered ? 1000 : 100}
                             eventHandlers={{
                                 click: () => onMarkerClick(p),
@@ -390,101 +458,130 @@ const MapComponent: React.FC<MapProps> = ({
                         </Marker>
                     );
                 })}
+
+                {/* Ruler overlays */}
+                {rulerActive && (
+                    <>
+                        <RulerClickHandler rulerPoints={rulerPoints} setRulerPoints={setRulerPoints} />
+                        {rulerPoints.a && (
+                            <Marker position={rulerPoints.a} icon={L.divIcon({
+                                html: `<div class="w-3 h-3 rounded-full bg-white border-2 border-gray-800 shadow-md" style="transform: translate(-50%, -50%)"></div>`,
+                                className: 'ruler-point-icon', iconSize: [0, 0], iconAnchor: [0, 0],
+                            })} zIndexOffset={2000} />
+                        )}
+                        {rulerPoints.b && (
+                            <Marker position={rulerPoints.b} icon={L.divIcon({
+                                html: `<div class="w-3 h-3 rounded-full bg-white border-2 border-gray-800 shadow-md" style="transform: translate(-50%, -50%)"></div>`,
+                                className: 'ruler-point-icon', iconSize: [0, 0], iconAnchor: [0, 0],
+                            })} zIndexOffset={2000} />
+                        )}
+                        {rulerPoints.a && rulerPoints.b && rulerDistance !== null && (() => {
+                            const [lat1, lng1] = rulerPoints.a!;
+                            const [lat2, lng2] = rulerPoints.b!;
+                            const totalDist = rulerDistance;
+
+                            // Calculate tick interval based on total distance
+                            let tickInterval: number;
+                            if (totalDist <= 0.5) tickInterval = 0.1;
+                            else if (totalDist <= 2) tickInterval = 0.5;
+                            else if (totalDist <= 5) tickInterval = 1;
+                            else if (totalDist <= 20) tickInterval = 2;
+                            else tickInterval = 5;
+
+                            // Direction vector
+                            const dLat = lat2 - lat1;
+                            const dLng = lng2 - lng1;
+                            const len = Math.sqrt(dLat * dLat + dLng * dLng);
+                            // Perpendicular (for tick marks)
+                            const perpLat = -dLng / len;
+                            const perpLng = dLat / len;
+                            const tickSize = len * 0.015; // tick length relative to line
+                            const smallTickSize = tickSize * 0.5;
+
+                            // Generate ticks
+                            const ticks: { pos: [number, number]; isMajor: boolean; dist: number }[] = [];
+                            const numSmallTicks = Math.floor(totalDist / (tickInterval / 5));
+                            for (let i = 0; i <= numSmallTicks; i++) {
+                                const frac = (i * (tickInterval / 5)) / totalDist;
+                                if (frac > 1.01) break;
+                                const clampedFrac = Math.min(frac, 1);
+                                const lat = lat1 + dLat * clampedFrac;
+                                const lng = lng1 + dLng * clampedFrac;
+                                const isMajor = (i % 5 === 0);
+                                ticks.push({ pos: [lat, lng], isMajor, dist: clampedFrac * totalDist });
+                            }
+
+                            // Major tick labels (at each major interval)
+                            const majorTicks = ticks.filter(t => t.isMajor && t.dist > 0.001 && t.dist < totalDist - 0.001);
+
+                            const formatDist = (d: number) => d < 1 ? `${(d * 1000).toFixed(0)} m` : `${d.toFixed(2)} km`;
+
+                            return (
+                                <>
+                                    {/* Main line */}
+                                    <Polyline
+                                        positions={[rulerPoints.a, rulerPoints.b]}
+                                        pathOptions={{ color: '#1a1a1a', weight: 2, opacity: 0.85 }}
+                                    />
+                                    {/* Tick marks */}
+                                    {ticks.map((tick, i) => {
+                                        const size = tick.isMajor ? tickSize : smallTickSize;
+                                        return (
+                                            <Polyline
+                                                key={`tick-${i}`}
+                                                positions={[
+                                                    [tick.pos[0] + perpLat * size, tick.pos[1] + perpLng * size],
+                                                    [tick.pos[0] - perpLat * size, tick.pos[1] - perpLng * size],
+                                                ]}
+                                                pathOptions={{ color: '#1a1a1a', weight: tick.isMajor ? 1.5 : 1, opacity: 0.7 }}
+                                            />
+                                        );
+                                    })}
+                                    {/* "0" label at start */}
+                                    <Marker
+                                        position={rulerPoints.a}
+                                        icon={L.divIcon({
+                                            html: `<div class="text-[11px] font-bold text-gray-700 whitespace-nowrap ruler-label-stroke" style="transform: translate(-50%, 6px)">0</div>`,
+                                            className: 'ruler-distance-label', iconSize: [0, 0], iconAnchor: [0, 0],
+                                        })}
+                                        zIndexOffset={2500}
+                                        interactive={false}
+                                    />
+                                    {/* Interval labels */}
+                                    {majorTicks.map((tick, i) => (
+                                        <Marker
+                                            key={`label-${i}`}
+                                            position={tick.pos as [number, number]}
+                                            icon={L.divIcon({
+                                                html: `<div class="text-[11px] font-bold text-gray-700 whitespace-nowrap ruler-label-stroke" style="transform: translate(-50%, 6px)">${formatDist(tick.dist)}</div>`,
+                                                className: 'ruler-distance-label', iconSize: [0, 0], iconAnchor: [0, 0],
+                                            })}
+                                            zIndexOffset={2500}
+                                            interactive={false}
+                                        />
+                                    ))}
+                                    {/* Total distance label at end */}
+                                    <Marker
+                                        position={rulerPoints.b}
+                                        icon={L.divIcon({
+                                            html: `<div class="text-[11px] font-bold text-gray-700 whitespace-nowrap ruler-label-stroke" style="transform: translate(-50%, 6px)">${formatDist(totalDist)}</div>`,
+                                            className: 'ruler-distance-label', iconSize: [0, 0], iconAnchor: [0, 0],
+                                        })}
+                                        zIndexOffset={2500}
+                                        interactive={false}
+                                    />
+                                </>
+                            );
+                        })()}
+                    </>
+                )}
             </MapContainer>
 
-            {/* Controls Container - Top Right - Increased Z-Index */}
-            <div className="absolute top-24 right-4 z-[1000] flex flex-col items-end gap-2">
-                
-                {/* Recenter Button (Only in Location Mode) */}
-                {searchMode === 'location' && (
-                     <button 
-                        onClick={handleRecenter}
-                        className="w-10 h-10 bg-white rounded-xl shadow-lg border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-700 transition-colors animate-in slide-in-from-right-4 duration-300 cursor-pointer active:scale-95"
-                        title="Recenter Map to Radius"
-                    >
-                        <LocateFixed className="w-5 h-5 text-scbx" />
-                    </button>
-                )}
 
-                {/* Layer Control Button */}
-                <div className="relative flex flex-col items-end">
-                    <button 
-                        onClick={() => setIsLayerControlOpen(!isLayerControlOpen)}
-                        className="w-10 h-10 bg-white rounded-xl shadow-lg border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-700 transition-colors cursor-pointer active:scale-95"
-                        title="Toggle Layers"
-                    >
-                        <Layers className="w-5 h-5" />
-                    </button>
-
-                    {isLayerControlOpen && (
-                        <div className="mt-2 bg-white/90 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-white/50 w-48 animate-in slide-in-from-top-2 duration-200">
-                            <div className="flex flex-col gap-1">
-                                {/* Project Toggle */}
-                                <button 
-                                    onClick={() => toggleLayer('projects')}
-                                    className={`flex items-center justify-between p-2 rounded-lg transition-colors ${visibleLayers.projects ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-6 h-6 rounded-md bg-gray-800 text-white flex items-center justify-center">
-                                            <Building2 size={14} />
-                                        </div>
-                                        <span className={`text-xs font-bold ${visibleLayers.projects ? 'text-gray-800' : 'text-gray-400'}`}>Projects</span>
-                                    </div>
-                                    {visibleLayers.projects ? <Eye size={14} className="text-gray-600" /> : <EyeOff size={14} className="text-gray-400" />}
-                                </button>
-
-                                <div className="h-px bg-gray-200 my-1"></div>
-
-                                {/* Mall Toggle */}
-                                <button 
-                                    onClick={() => toggleLayer('mall')}
-                                    className={`flex items-center justify-between p-2 rounded-lg transition-colors ${visibleLayers.mall ? 'bg-orange-50' : 'hover:bg-gray-50'}`}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-6 h-6 rounded-md bg-orange-100 text-orange-600 flex items-center justify-center">
-                                            <ShoppingBag size={14} />
-                                        </div>
-                                        <span className={`text-xs font-bold ${visibleLayers.mall ? 'text-gray-800' : 'text-gray-400'}`}>Malls</span>
-                                    </div>
-                                    {visibleLayers.mall ? <Check size={14} className="text-orange-600" /> : <div className="w-3.5 h-3.5 rounded border border-gray-300"></div>}
-                                </button>
-
-                                {/* Hospital Toggle */}
-                                <button 
-                                    onClick={() => toggleLayer('hospital')}
-                                    className={`flex items-center justify-between p-2 rounded-lg transition-colors ${visibleLayers.hospital ? 'bg-red-50' : 'hover:bg-gray-50'}`}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-6 h-6 rounded-md bg-red-100 text-red-600 flex items-center justify-center">
-                                            <Stethoscope size={14} />
-                                        </div>
-                                        <span className={`text-xs font-bold ${visibleLayers.hospital ? 'text-gray-800' : 'text-gray-400'}`}>Hospitals</span>
-                                    </div>
-                                    {visibleLayers.hospital ? <Check size={14} className="text-red-600" /> : <div className="w-3.5 h-3.5 rounded border border-gray-300"></div>}
-                                </button>
-
-                                {/* School Toggle */}
-                                <button 
-                                    onClick={() => toggleLayer('school')}
-                                    className={`flex items-center justify-between p-2 rounded-lg transition-colors ${visibleLayers.school ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center">
-                                            <GraduationCap size={14} />
-                                        </div>
-                                        <span className={`text-xs font-bold ${visibleLayers.school ? 'text-gray-800' : 'text-gray-400'}`}>Schools</span>
-                                    </div>
-                                    {visibleLayers.school ? <Check size={14} className="text-blue-600" /> : <div className="w-3.5 h-3.5 rounded border border-gray-300"></div>}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
 
             {/* Code Legend - Right Side Vertical (Visible only if projects are enabled) */}
             {visibleLayers.projects && uniqueCodes.length > 0 && (
-                <div className="absolute bottom-8 right-4 bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-white/50 z-[400] max-h-[60vh] overflow-y-auto custom-scrollbar flex flex-col gap-2 min-w-[100px]">
+                <div className="absolute top-1/2 -translate-y-1/2 right-4 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md p-4 rounded-2xl shadow-premium border border-white/50 dark:border-gray-700/50 z-[400] max-h-[60vh] overflow-y-auto custom-scrollbar flex flex-col gap-2 min-w-[100px]">
                     {uniqueCodes.map(code => {
                         const colors = getCodeColor(code);
                         return (
@@ -495,10 +592,54 @@ const MapComponent: React.FC<MapProps> = ({
                                 >
                                     {/* Optional: Add dot or letter inside legend color box for reference */}
                                 </span>
-                                <span className="text-xs font-bold text-gray-700 whitespace-nowrap">{code}</span>
+                                <span className="text-xs font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">{code}</span>
                             </div>
                         );
                     })}
+                </div>
+            )}
+
+            {/* Right-click coordinate popup (rendered outside MapContainer) */}
+            {ctxMenu && (
+                <div
+                    className="absolute z-[1000] bg-white/95 backdrop-blur-xl rounded-xl shadow-premium border border-gray-100/50 py-2 px-3 min-w-[180px]"
+                    style={{ left: ctxMenu.x, top: ctxMenu.y, transform: 'translate(-50%, -100%) translateY(-8px)' }}
+                >
+                    <div className="text-[10px] font-medium text-gray-400 mb-1">Coordinates</div>
+                    <div className="text-xs font-mono text-gray-700 mb-2">
+                        {ctxMenu.lat.toFixed(6)}, {ctxMenu.lng.toFixed(6)}
+                    </div>
+                    <button
+                        onClick={handleCtxCopy}
+                        className={`w-full text-[11px] font-bold py-1.5 rounded-lg transition-all ${
+                            ctxCopied
+                                ? 'bg-green-50 text-green-600 border border-green-200'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                        }`}
+                    >
+                        {ctxCopied ? '✓ Copied!' : 'Copy Coordinates'}
+                    </button>
+                    <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b border-r border-gray-100/50 rotate-45" />
+                </div>
+            )}
+
+            {/* Ruler instruction banner */}
+            {rulerActive && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[500] bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-xl shadow-premium border border-gray-100/50 dark:border-gray-700/50 px-5 py-3 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-scbx/10 flex items-center justify-center shrink-0">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1B333C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/>
+                            <path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                            {!rulerPoints.a ? 'Click map to place Point A' : !rulerPoints.b ? 'Click map to place Point B' : 'Click to start a new measurement'}
+                        </div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">
+                            {!rulerPoints.a ? 'Set the starting point' : !rulerPoints.b ? 'Set the destination point' : 'Distance shown on the line'}
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

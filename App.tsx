@@ -1,11 +1,14 @@
-import React, { useState, useMemo } from 'react';
-import { UploadCloud, Download, X, Loader, RefreshCw, Upload } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { UploadCloud, X, Loader, RefreshCw, Maximize2, Minimize2 } from 'lucide-react';
 import { Project, SearchState, NearbyPlace } from './types';
-import Sidebar from './components/Sidebar';
+import IconSidebar, { SidebarTab } from './components/IconSidebar';
+import FeedbackWidget from './components/FeedbackWidget';
 import MapComponent from './components/Map';
 import ProjectDetailPanel from './components/ProjectDetailPanel';
 import ResultsPanel from './components/FilterModal';
 import ExportDashboard from './components/ExportDashboard';
+import FloatingFilterBar from './components/FloatingFilterBar';
+import WelcomeModal from './components/WelcomeModal';
 import { parseCSV } from './services/csvService';
 import html2canvas from 'html2canvas';
 
@@ -24,8 +27,6 @@ const App: React.FC = () => {
     const [fileName, setFileName] = useState<string>('');
     const [loading, setLoading] = useState(false);
     const [loadingText, setLoadingText] = useState('');
-
-    const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
 
     const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
     const [activeProject, setActiveProject] = useState<Project | null>(null);
@@ -46,13 +47,59 @@ const App: React.FC = () => {
         maxPrice: null,
         minLaunchDate: null,
         maxSoldPercent: 100,
-        priceSegment: null
+        priceSegment: null,
+        developerFilter: []
     });
 
     const [unifiedSearchInput, setUnifiedSearchInput] = useState('13.7563, 100.5018');
 
     const [showUploadModal, setShowUploadModal] = useState(true);
     const [showExportModal, setShowExportModal] = useState(false);
+    const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+    const [toastMessage, setToastMessage] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<SidebarTab>('projects');
+    const [placeCounts, setPlaceCounts] = useState({ mall: 0, hospital: 0, school: 0, hotel: 0 });
+    const [visibleLayers, setVisibleLayers] = useState({ projects: true, mall: true, hospital: true, school: true, hotel: true });
+    const [focusMode, setFocusMode] = useState(false);
+    const [rulerActive, setRulerActive] = useState(false);
+    const [rulerPoints, setRulerPoints] = useState<{ a: [number, number] | null; b: [number, number] | null }>({ a: null, b: null });
+    const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+
+    useEffect(() => {
+        const hasSeenWelcome = localStorage.getItem('radia_welcome_v2');
+        if (!hasSeenWelcome) {
+            setShowWelcomeModal(true);
+        }
+    }, []);
+
+    // Hotkey: R to toggle ruler
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const tag = (e.target as HTMLElement)?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
+            if (e.key === 'r' || e.key === 'R') {
+                setRulerActive(prev => !prev);
+                setRulerPoints({ a: null, b: null });
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
+    const toggleLayer = (layer: keyof typeof visibleLayers) => {
+        setVisibleLayers(prev => ({ ...prev, [layer]: !prev[layer] }));
+    };
+
+    const showToast = (msg: string) => {
+        setToastMessage(msg);
+        setTimeout(() => setToastMessage(null), 3000);
+    };
+
+    // Ensure light mode is always active
+    useEffect(() => {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+    }, []);
 
     const projectsInView = useMemo(() => {
         let data = projects.map(p => ({
@@ -66,6 +113,10 @@ const App: React.FC = () => {
 
         if (searchState.typeFilter.length > 0) {
             data = data.filter(p => p.subUnits.some(u => searchState.typeFilter.includes(u.type)));
+        }
+
+        if (searchState.developerFilter.length > 0) {
+            data = data.filter(p => searchState.developerFilter.includes(p.developer));
         }
 
         if (searchState.minPrice !== null || searchState.maxPrice !== null) {
@@ -87,7 +138,6 @@ const App: React.FC = () => {
                     const validDates = p.subUnits
                         .map(u => parseFloat(u.launchDate))
                         .filter(d => !isNaN(d));
-
                     if (validDates.length === 0) return false;
                     return validDates.some(d => d >= minVal);
                 });
@@ -98,7 +148,6 @@ const App: React.FC = () => {
             data = data.filter(p => parseFloat(p.percentSold) <= searchState.maxSoldPercent);
         }
 
-        // Price segment filter
         if (searchState.priceSegment) {
             const getSegmentRange = (seg: string): { min: number, max: number } => {
                 switch (seg) {
@@ -119,13 +168,12 @@ const App: React.FC = () => {
                 if (validPrices.length === 0) return false;
                 const projectMin = Math.min(...validPrices);
                 const projectMax = Math.max(...validPrices);
-                // Project overlaps with segment if projectMin < range.max AND projectMax >= range.min
                 return projectMin < range.max && projectMax >= range.min;
             });
         }
 
         return data;
-    }, [projects, searchState.lat, searchState.lng, searchState.radius, searchState.typeFilter, searchState.minPrice, searchState.maxPrice, searchState.minLaunchDate, searchState.maxSoldPercent, searchState.priceSegment, searchState.searchMode]);
+    }, [projects, searchState.lat, searchState.lng, searchState.radius, searchState.typeFilter, searchState.developerFilter, searchState.minPrice, searchState.maxPrice, searchState.minLaunchDate, searchState.maxSoldPercent, searchState.priceSegment, searchState.searchMode]);
 
     const filteredProjects = useMemo(() => {
         let data = [...projectsInView];
@@ -204,7 +252,12 @@ const App: React.FC = () => {
             const lat = parseFloat(parts[0].trim());
             const lng = parseFloat(parts[1].trim());
             if (!isNaN(lat) && !isNaN(lng)) {
-                setSearchState(prev => ({ ...prev, lat, lng }));
+                setSearchState(prev => {
+                    // Small hack to ensure MapUpdater re-triggers even if coords match exactly, 
+                    // because the user might have dragged the map and wants to re-center.
+                    const newLat = prev.lat === lat ? lat + 0.0000000000001 : lat;
+                    return { ...prev, lat: newLat, lng };
+                });
                 setSelectedProject(null);
                 setActivePlace(null);
             }
@@ -217,6 +270,7 @@ const App: React.FC = () => {
             radius: 3,
             codeFilter: [],
             typeFilter: [],
+            developerFilter: [],
             minPrice: null,
             maxPrice: null,
             minLaunchDate: null,
@@ -254,15 +308,13 @@ const App: React.FC = () => {
         }
     };
 
-    const sidebarWidth = isSidebarExpanded ? 'min(calc(100% - 32px), 420px)' : '80px';
-    const resultsPanelLeft = isSidebarExpanded ? 'md:left-[450px] left-4' : 'md:left-[110px] left-4';
-    const detailsPanelClass = useMemo(() => {
-        return isSidebarExpanded ? "xl:left-[850px] md:left-[450px] left-4" : "xl:left-[510px] md:left-[110px] left-4";
-    }, [isSidebarExpanded]);
+    // Layout constants
+    const ICON_SIDEBAR_WIDTH = 64;
+    const PROPERTY_LIST_WIDTH = 360;
 
     return (
-        <div className="flex flex-col h-screen text-[#222] overflow-hidden bg-gray-50 relative">
-            {/* Background Map */}
+        <div className="flex flex-col h-screen text-[#222] dark:text-gray-100 overflow-hidden bg-gray-50 dark:bg-gray-950 relative transition-colors duration-300">
+            {/* Background Map — full screen */}
             <div className="absolute inset-0 z-0">
                 <MapComponent
                     center={[searchState.lat, searchState.lng]}
@@ -274,80 +326,61 @@ const App: React.FC = () => {
                     onMarkerClick={handleProjectSelect}
                     nearbyPlaces={nearbyPlaces}
                     activePlace={activePlace}
+                    visibleLayers={visibleLayers}
+                    rulerActive={rulerActive}
+                    rulerPoints={rulerPoints}
+                    setRulerPoints={setRulerPoints}
                 />
             </div>
 
-            {/* Top Bar Navigation (Matching Screenshot Design) */}
-            <header className="fixed top-4 left-4 right-4 z-50 flex items-center justify-between pointer-events-none">
-                {/* Brand Pill */}
-                <div className="flex items-center h-12 bg-white rounded-full shadow-lg border border-white/50 px-4 pointer-events-auto">
-                    <div className="flex items-center gap-2 select-none">
-                        <img src="/logo_radia.png" alt="Radia" className="h-7 w-auto" />
-                    </div>
+            {/* Focus Mode Toggle — always visible */}
+            <button
+                onClick={() => setFocusMode(prev => !prev)}
+                className="fixed bottom-4 right-4 z-50 w-10 h-10 bg-white/90 dark:bg-gray-900/90 backdrop-blur-2xl rounded-xl shadow-premium border border-gray-100/50 dark:border-gray-700/50 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white active:opacity-80 transition-colors"
+                title={focusMode ? 'Exit focus mode' : 'Focus mode'}
+            >
+                {focusMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+
+            {/* Icon Sidebar — far left */}
+            <div className={`transition-opacity duration-300 ${focusMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                <IconSidebar
+                    activeTab={activeTab}
+                    onTabChange={setActiveTab}
+                    counts={{ projects: filteredProjects.length, ...placeCounts }}
+                    visibleLayers={visibleLayers}
+                    onToggleLayer={toggleLayer}
+                    onFeedbackClick={() => setShowFeedbackModal(true)}
+                    onWhatsNewClick={() => setShowWelcomeModal(true)}
+                />
+            </div>
+
+            {/* Export Report button — top right */}
+            <div className={`fixed top-4 right-4 z-40 transition-opacity duration-300 ${focusMode ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'}`}>
+                <div className="flex items-center gap-2 bg-white/90 dark:bg-gray-900/90 backdrop-blur-2xl rounded-xl shadow-premium border border-gray-100/50 dark:border-gray-700/50 px-2 py-1.5 panel-grain">
                     {fileName && (
-                        <div className="flex items-center ml-4 pl-4 border-l border-gray-100 min-w-0">
-                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mr-2">Loaded:</span>
-                            <span className="text-xs font-bold text-gray-800 truncate max-w-[120px]">{fileName}</span>
-                            <button onClick={() => setShowUploadModal(true)} className="ml-2 p-1.5 hover:bg-gray-100 rounded-full text-gray-400 hover:text-scbx transition-colors">
-                                <RefreshCw className="w-3.5 h-3.5" />
+                        <div className="flex items-center px-2">
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mr-1.5">Data:</span>
+                            <span className="text-xs font-bold text-gray-800 dark:text-gray-200 truncate max-w-[100px]">{fileName}</span>
+                            <button onClick={() => setShowUploadModal(true)} className="ml-1.5 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-400 hover:text-scbx transition-colors">
+                                <RefreshCw className="w-3 h-3" />
                             </button>
+                            <div className="w-px h-6 bg-gray-200 dark:bg-gray-600 ml-2"></div>
                         </div>
                     )}
-                    {!fileName && (
-                        <button onClick={() => setShowUploadModal(true)} className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-100 text-scbx hover:text-scbxHover transition-colors">
-                            <Upload className="w-4 h-4" />
-                            <span className="text-xs font-bold uppercase tracking-wide">Upload CSV</span>
-                        </button>
-                    )}
-                </div>
-
-                {/* Export Button Pill */}
-                <div className="pointer-events-auto">
-                    <button onClick={() => setShowExportModal(true)} className="flex items-center gap-2 h-12 px-6 bg-white rounded-full shadow-lg border border-white/50 text-gray-800 font-bold hover:bg-gray-50 transition-all hover:scale-105 active:scale-95 group">
-                        <Download className="w-5 h-5 text-scbx group-hover:translate-y-0.5 transition-transform" />
-                        <span className="text-sm">Export report</span>
+                    <button
+                        onClick={() => setShowExportModal(true)}
+                        className="flex items-center gap-1.5 h-8 px-4 rounded-lg bg-scbx text-white font-display font-normal hover:bg-scbxHover active:opacity-80 transition-colors group text-xs shadow-[inset_0_1px_8px_rgba(255,255,255,0.2),inset_0_-1px_4px_rgba(0,0,0,0.15)]"
+                    >
+                        <span>Export report</span>
                     </button>
-                </div>
-            </header>
-
-            {/* Project Details Panel (Conditional on selection) */}
-            <ProjectDetailPanel
-                project={selectedProject}
-                onClose={() => setSelectedProject(null)}
-                className={detailsPanelClass}
-            />
-
-            {/* Sidebar (Filters) */}
-            <div
-                className="absolute top-24 left-4 bottom-4 z-20 transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)]"
-                style={{ width: sidebarWidth }}
-            >
-                <div className="h-full w-full bg-white/75 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/50 overflow-hidden flex flex-col relative transition-all duration-300">
-                    <Sidebar
-                        searchState={searchState}
-                        setSearchState={setSearchState}
-                        availableTypes={availableTypes}
-                        allProjects={projects}
-                        unifiedSearchInput={unifiedSearchInput}
-                        setUnifiedSearchInput={setUnifiedSearchInput}
-                        handleSearchAction={handleSearchAction}
-                        handleResetFilters={handleResetFilters}
-                        isCollapsed={!isSidebarExpanded}
-                        onToggle={() => setIsSidebarExpanded(!isSidebarExpanded)}
-                    />
                 </div>
             </div>
 
-            {/* Results Panel */}
+            {/* Property List Panel — next to icon sidebar */}
             <div
-                className={`
-                    absolute top-24 bottom-4 z-10
-                    ${resultsPanelLeft}
-                    w-[min(calc(100%-16px),380px)]
-                    bg-white/75 backdrop-blur-2xl shadow-2xl rounded-3xl border border-white/50
-                    flex flex-col transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] origin-left
-                    translate-x-0 opacity-100
-                `}
+                className={`absolute top-3 bottom-3 z-10 bg-white dark:bg-gray-900 shadow-premium-lg border border-gray-100/50 dark:border-gray-700/50 rounded-lg flex flex-col transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] overflow-hidden panel-grain ${focusMode ? 'opacity-0 pointer-events-none -translate-x-full' : 'opacity-100 translate-x-0'}`}
+                style={{ left: ICON_SIDEBAR_WIDTH + 20, width: PROPERTY_LIST_WIDTH }}
             >
                 <ResultsPanel
                     projects={filteredProjects}
@@ -359,26 +392,56 @@ const App: React.FC = () => {
                     selectedProjectId={selectedProject?.projectId || null}
                     onPlacesFetched={setNearbyPlaces}
                     onPlaceClick={handlePlaceSelect}
+                    activeTab={activeTab}
+                    onPlaceCounts={setPlaceCounts}
+                />
+            </div>
+
+            {/* Project Details Panel (Conditional on selection) */}
+            <div className={`transition-opacity duration-300 ${focusMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                <ProjectDetailPanel
+                    project={selectedProject}
+                    onClose={() => setSelectedProject(null)}
+                    className={`left-3 md:left-[452px]`}
+                />
+            </div>
+
+            {/* Floating Filter Bar — bottom center */}
+            <div className={`transition-opacity duration-300 ${focusMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                <FloatingFilterBar
+                    searchState={searchState}
+                    setSearchState={setSearchState}
+                    availableTypes={availableTypes}
+                    allProjects={projects}
+                    unifiedSearchInput={unifiedSearchInput}
+                    setUnifiedSearchInput={setUnifiedSearchInput}
+                    handleSearchAction={handleSearchAction}
+                    handleResetFilters={handleResetFilters}
+                    rulerActive={rulerActive}
+                    onToggleRuler={() => {
+                        setRulerActive(prev => !prev);
+                        setRulerPoints({ a: null, b: null });
+                    }}
                 />
             </div>
 
             {/* Upload Modal Overlay */}
             {showUploadModal && (
                 <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white/90 backdrop-blur-2xl rounded-3xl shadow-2xl w-full max-w-md p-8 relative border border-white/50 animate-in zoom-in-95 duration-200">
+                    <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-2xl rounded-xl shadow-premium-lg w-full max-w-md p-8 relative border border-white/50 dark:border-gray-700/50 animate-in zoom-in-95 duration-200">
                         {projects.length > 0 && (
                             <button onClick={() => setShowUploadModal(false)} className="absolute top-5 right-5 text-gray-400 hover:text-black transition">
                                 <X className="w-6 h-6" />
                             </button>
                         )}
-                        <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">Import Market Data</h3>
-                        <div className="bg-white/50 rounded-2xl p-10 border-2 border-dashed border-gray-300 text-center hover:bg-white/80 hover:border-scbx transition-all cursor-pointer relative group">
+                        <h3 className="text-2xl font-medium text-gray-900 dark:text-gray-100 mb-6 text-center tracking-tight">Import Data</h3>
+                        <div className="bg-white/50 dark:bg-gray-800/50 rounded-2xl p-10 border-2 border-dashed border-gray-300 dark:border-gray-600 text-center hover:bg-white/80 dark:hover:bg-gray-700/80 hover:border-scbx transition-all cursor-pointer relative group">
                             <input type="file" accept=".csv" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
-                            <div className="bg-white p-4 rounded-full inline-block shadow-sm mb-4 group-hover:scale-110 transition-transform">
+                            <div className="bg-white dark:bg-gray-700 p-4 rounded-full inline-block shadow-sm mb-4 group-hover:scale-110 transition-transform">
                                 <UploadCloud className="w-8 h-8 text-scbx" />
                             </div>
-                            <p className="text-base font-bold text-gray-800">Click to upload CSV</p>
-                            <p className="text-xs text-gray-500 mt-1">or drag and drop file here</p>
+                            <p className="text-base font-medium text-gray-800 dark:text-gray-200">Click to upload CSV</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">or drag and drop file here</p>
                         </div>
                     </div>
                 </div>
@@ -396,14 +459,38 @@ const App: React.FC = () => {
                 />
             )}
 
-            {/* Loading Indicator */}
             {loading && (
                 <div className="fixed inset-0 z-[200] bg-black/30 backdrop-blur-md flex items-center justify-center">
-                    <div className="bg-white/75 backdrop-blur-2xl p-8 rounded-3xl shadow-2xl flex flex-col items-center border border-white/50">
+                    <div className="bg-white/75 dark:bg-gray-900/75 backdrop-blur-2xl p-8 rounded-xl shadow-premium-lg flex flex-col items-center border border-white/50 dark:border-gray-700/50">
                         <Loader className="w-12 h-12 text-scbx animate-spin mb-4" />
-                        <span className="text-base font-bold text-gray-800">{loadingText}</span>
+                        <span className="text-base font-bold text-gray-800 dark:text-gray-200">{loadingText}</span>
                     </div>
                 </div>
+            )}
+
+            {toastMessage && (
+                <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[300] bg-gray-900 dark:bg-gray-800 text-white px-5 py-3 rounded-xl shadow-premium-lg text-sm flex items-center justify-center font-bold tracking-tight animate-in slide-in-from-bottom-5 fade-in duration-300">
+                    {toastMessage}
+                </div>
+            )}
+
+            {showFeedbackModal && (
+                <FeedbackWidget 
+                    onClose={() => setShowFeedbackModal(false)}
+                    onFeedbackSubmitted={(hasDescription: boolean) => {
+                        if (!hasDescription) {
+                            setShowFeedbackModal(false);
+                            showToast("Thanks for your feedback");
+                        }
+                    }}
+                />
+            )}
+
+            {showWelcomeModal && (
+                <WelcomeModal onClose={() => {
+                    localStorage.setItem('radia_welcome_v2', 'true');
+                    setShowWelcomeModal(false);
+                }} />
             )}
         </div>
     );
