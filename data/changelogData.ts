@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 
 export const changelogEntries: ChangelogEntry[] = [
   {
+    version: 'v1.5.0',
+    date: '2026-03-31',
+    title: 'Demo Dataset & Instant Onboarding',
+    description: 'New users can now explore Radia instantly with a built-in sample dataset — no CSV upload required.',
+    changes: [
+      { type: 'new', text: '"Try with sample data" button on the Import Data modal for zero-friction first experience' },
+      { type: 'new', text: 'Built-in demo dataset with 42 fictional Bangkok RE projects across 15 area codes' },
+      { type: 'improved', text: 'CSV parsing engine refactored to eliminate code duplication via shared processRawData function' },
+    ],
+  },
+  {
     version: 'v1.4.1',
     date: '2026-03-30',
     title: 'UI Polish & Dialog Updates',

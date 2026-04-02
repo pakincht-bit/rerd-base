@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { UploadCloud, X, Loader, RefreshCw, Maximize2, Minimize2 } from 'lucide-react';
+import { UploadCloud, X, Loader, RefreshCw, Maximize2, Minimize2, Database } from 'lucide-react';
 import { Project, SearchState, NearbyPlace } from './types';
 import IconSidebar, { SidebarTab } from './components/IconSidebar';
 import FeedbackWidget from './components/FeedbackWidget';
@@ -9,7 +9,7 @@ import ResultsPanel from './components/FilterModal';
 import ExportDashboard from './components/ExportDashboard';
 import FloatingFilterBar from './components/FloatingFilterBar';
 import WelcomeModal from './components/WelcomeModal';
-import { parseCSV } from './services/csvService';
+import { parseCSV, parseCSVFromText } from './services/csvService';
 import html2canvas from 'html2canvas';
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -64,6 +64,7 @@ const App: React.FC = () => {
     const [rulerActive, setRulerActive] = useState(false);
     const [rulerPoints, setRulerPoints] = useState<{ a: [number, number] | null; b: [number, number] | null }>({ a: null, b: null });
     const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+    const [excludedProjectIds, setExcludedProjectIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         const hasSeenWelcome = localStorage.getItem('radia_welcome_v2');
@@ -177,6 +178,10 @@ const App: React.FC = () => {
 
     const filteredProjects = useMemo(() => {
         let data = [...projectsInView];
+        // Apply manual exclusions
+        if (excludedProjectIds.size > 0) {
+            data = data.filter(p => !excludedProjectIds.has(p.projectId));
+        }
         if (searchState.codeFilter.length > 0) {
             data = data.filter(p => searchState.codeFilter.includes(p.code));
         }
@@ -211,7 +216,7 @@ const App: React.FC = () => {
             }
             return (a.distance || 0) - (b.distance || 0);
         });
-    }, [projectsInView, searchState.codeFilter, searchState.sortBy]);
+    }, [projectsInView, searchState.codeFilter, searchState.sortBy, excludedProjectIds]);
 
     const availableTypes = useMemo(() => {
         const types = new Set<string>();
@@ -237,6 +242,30 @@ const App: React.FC = () => {
             }
         } catch (err) {
             alert('Failed to parse CSV');
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleLoadDemo = async () => {
+        setLoading(true);
+        setLoadingText('Loading demo data...');
+        try {
+            const res = await fetch('/demo-data.csv');
+            const text = await res.text();
+            const data = parseCSVFromText(text);
+            setProjects(data);
+            setFileName('demo-data.csv');
+            if (data.length > 0) {
+                const initialLat = data[0].lat;
+                const initialLng = data[0].lng;
+                setSearchState(prev => ({ ...prev, lat: initialLat, lng: initialLng, radius: 5 }));
+                setUnifiedSearchInput(`${initialLat.toFixed(5)}, ${initialLng.toFixed(5)}`);
+                setShowUploadModal(false);
+            }
+        } catch (err) {
+            alert('Failed to load demo data');
             console.error(err);
         } finally {
             setLoading(false);
@@ -330,6 +359,14 @@ const App: React.FC = () => {
                     rulerActive={rulerActive}
                     rulerPoints={rulerPoints}
                     setRulerPoints={setRulerPoints}
+                    onExcludeProject={(id) => {
+                        setExcludedProjectIds(prev => {
+                            const next = new Set(prev);
+                            next.add(id);
+                            return next;
+                        });
+                        showToast('Project hidden from analysis');
+                    }}
                 />
             </div>
 
@@ -394,6 +431,19 @@ const App: React.FC = () => {
                     onPlaceClick={handlePlaceSelect}
                     activeTab={activeTab}
                     onPlaceCounts={setPlaceCounts}
+                    excludedCount={excludedProjectIds.size}
+                    onExcludeProject={(id) => {
+                        setExcludedProjectIds(prev => {
+                            const next = new Set(prev);
+                            next.add(id);
+                            return next;
+                        });
+                        showToast('Project hidden from analysis');
+                    }}
+                    onRestoreAll={() => {
+                        setExcludedProjectIds(new Set());
+                        showToast('All hidden projects restored');
+                    }}
                 />
             </div>
 
@@ -443,6 +493,19 @@ const App: React.FC = () => {
                             <p className="text-base font-medium text-gray-800 dark:text-gray-200">Click to upload CSV</p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">or drag and drop file here</p>
                         </div>
+                        <div className="relative flex items-center my-5">
+                            <div className="flex-1 border-t border-gray-200 dark:border-gray-700"></div>
+                            <span className="px-3 text-xs text-gray-400 font-medium">or</span>
+                            <div className="flex-1 border-t border-gray-200 dark:border-gray-700"></div>
+                        </div>
+                        <button
+                            onClick={handleLoadDemo}
+                            className="w-full h-12 rounded-xl bg-scbx text-white font-display font-normal hover:bg-scbxHover active:opacity-80 transition-all text-sm shadow-[inset_0_1px_8px_rgba(255,255,255,0.2),inset_0_-1px_4px_rgba(0,0,0,0.15)] flex items-center justify-center gap-2"
+                        >
+                            <Database className="w-4 h-4" />
+                            <span>Try with sample data</span>
+                        </button>
+                        <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center mt-2">Explore 42 fictional projects across Bangkok</p>
                     </div>
                 </div>
             )}

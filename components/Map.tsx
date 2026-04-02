@@ -112,6 +112,7 @@ interface MapProps {
     rulerActive: boolean;
     rulerPoints: { a: [number, number] | null; b: [number, number] | null };
     setRulerPoints: React.Dispatch<React.SetStateAction<{ a: [number, number] | null; b: [number, number] | null }>>;
+    onExcludeProject?: (projectId: string) => void;
 }
 
 // Component to handle map movements
@@ -304,7 +305,8 @@ const MapComponent: React.FC<MapProps> = ({
     visibleLayers,
     rulerActive,
     rulerPoints,
-    setRulerPoints
+    setRulerPoints,
+    onExcludeProject
 }) => {
 
 
@@ -345,6 +347,10 @@ const MapComponent: React.FC<MapProps> = ({
         setCtxMenu(data);
         setCtxCopied(false);
     }, []);
+
+    // Project-specific right-click context menu
+    const [projectCtxMenu, setProjectCtxMenu] = useState<{ projectId: string; projectName: string; x: number; y: number } | null>(null);
+
     const handleCtxCopy = useCallback(() => {
         if (!ctxMenu) return;
         const text = `${ctxMenu.lat.toFixed(6)}, ${ctxMenu.lng.toFixed(6)}`;
@@ -382,7 +388,7 @@ const MapComponent: React.FC<MapProps> = ({
 
                 <MapResizer />
                 <ProjectFlyTo project={activeProject} place={activePlace} />
-                <MapContextMenuListener onContextMenu={handleCtxOpen} onClose={closeCtxMenu} />
+                <MapContextMenuListener onContextMenu={handleCtxOpen} onClose={() => { closeCtxMenu(); setProjectCtxMenu(null); }} />
 
                 {searchMode === 'location' && (
                     <>
@@ -438,6 +444,14 @@ const MapComponent: React.FC<MapProps> = ({
                             zIndexOffset={isHovered ? 1000 : 100}
                             eventHandlers={{
                                 click: () => onMarkerClick(p),
+                                contextmenu: (e) => {
+                                    e.originalEvent.preventDefault();
+                                    e.originalEvent.stopPropagation();
+                                    const map = e.target._map;
+                                    const point = map.latLngToContainerPoint(e.latlng);
+                                    setProjectCtxMenu({ projectId: p.projectId, projectName: p.name, x: point.x, y: point.y });
+                                    setCtxMenu(null); // close coordinate menu if open
+                                },
                                 mouseover: (e) => {
                                     const icon = e.target.getElement();
                                     if(icon) icon.classList.add('marker-hover');
@@ -449,10 +463,41 @@ const MapComponent: React.FC<MapProps> = ({
                             }}
                         >
                              <Tooltip direction="top" offset={[0, -20]} opacity={1}>
-                                <div className="text-center px-1">
-                                    <span className="font-bold text-gray-900 block text-sm whitespace-nowrap">{p.name}</span>
-                                    <span className="text-[10px] text-gray-500 block">{p.developer}</span>
-                                    <span className="text-[10px] font-bold text-scbx block mt-0.5">{p.priceRange}</span>
+                                <div className="px-1 min-w-[180px]">
+                                    <div className="text-center mb-1.5 pb-1.5 border-b border-gray-100">
+                                        <span className="font-bold text-gray-900 block text-sm whitespace-nowrap">{p.name}</span>
+                                        <span className="text-[10px] text-gray-500 block">{p.developer}</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+                                        <div>
+                                            <span className="text-gray-400">Price (MB)</span>
+                                            <span className="block font-bold text-gray-800">{p.priceRange || '-'}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-gray-400">Sold</span>
+                                            <span className={`block font-bold ${parseFloat(p.percentSold) >= 80 ? 'text-green-600' : parseFloat(p.percentSold) >= 50 ? 'text-amber-600' : 'text-gray-800'}`}>{parseFloat(p.percentSold).toFixed(1)}%</span>
+                                        </div>
+                                        <div>
+                                            {(() => {
+                                                const remaining = p.totalUnits - p.soldUnits;
+                                                const validPrices = p.subUnits.map(u => u.price).filter(x => x > 0);
+                                                if (remaining <= 0 || validPrices.length === 0) return (
+                                                    <><span className="text-gray-400">Remaining</span><span className="block font-bold text-gray-800">Sold out</span></>
+                                                );
+                                                const avgPrice = validPrices.reduce((s, v) => s + v, 0) / validPrices.length;
+                                                const val = remaining * avgPrice;
+                                                const unit = val >= 1000 ? 'B' : 'MB';
+                                                const display = val >= 1000 ? Math.round(val / 1000).toLocaleString() : Math.round(val).toLocaleString();
+                                                return (
+                                                    <><span className="text-gray-400">Remaining ({unit})</span><span className="block font-bold text-gray-800">{display}</span></>
+                                                );
+                                            })()}
+                                        </div>
+                                        <div>
+                                            <span className="text-gray-400">Speed/yr</span>
+                                            <span className="block font-bold text-gray-800">{parseFloat(p.saleSpeed) > 0 ? `${parseFloat(p.saleSpeed).toFixed(1)}%` : '-'}</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </Tooltip>
                         </Marker>
@@ -600,7 +645,7 @@ const MapComponent: React.FC<MapProps> = ({
             )}
 
             {/* Right-click coordinate popup (rendered outside MapContainer) */}
-            {ctxMenu && (
+            {ctxMenu && !projectCtxMenu && (
                 <div
                     className="absolute z-[1000] bg-white/95 backdrop-blur-xl rounded-xl shadow-premium border border-gray-100/50 py-2 px-3 min-w-[180px]"
                     style={{ left: ctxMenu.x, top: ctxMenu.y, transform: 'translate(-50%, -100%) translateY(-8px)' }}
@@ -618,6 +663,30 @@ const MapComponent: React.FC<MapProps> = ({
                         }`}
                     >
                         {ctxCopied ? '✓ Copied!' : 'Copy Coordinates'}
+                    </button>
+                    <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b border-r border-gray-100/50 rotate-45" />
+                </div>
+            )}
+
+            {/* Right-click project context menu */}
+            {projectCtxMenu && (
+                <div
+                    className="absolute z-[1000] bg-white/95 backdrop-blur-xl rounded-xl shadow-premium border border-gray-100/50 py-2 px-1 min-w-[200px]"
+                    style={{ left: projectCtxMenu.x, top: projectCtxMenu.y, transform: 'translate(-50%, -100%) translateY(-8px)' }}
+                >
+                    <div className="px-2.5 pb-1.5 mb-1 border-b border-gray-100">
+                        <div className="text-[10px] font-medium text-gray-400">Project</div>
+                        <div className="text-xs font-bold text-gray-800 truncate max-w-[180px]">{projectCtxMenu.projectName}</div>
+                    </div>
+                    <button
+                        onClick={() => {
+                            if (onExcludeProject) onExcludeProject(projectCtxMenu.projectId);
+                            setProjectCtxMenu(null);
+                        }}
+                        className="w-full text-left text-[11px] font-medium py-1.5 px-2.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        Hide from analysis
                     </button>
                     <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b border-r border-gray-100/50 rotate-45" />
                 </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Project, SearchState, NearbyPlace } from '../types';
-import { ChevronDown, TrendingUp, SearchX, Calendar, ShoppingBag, Stethoscope, GraduationCap, Star, Loader2, AlertCircle, Bed, MapPinOff } from 'lucide-react';
+import { ChevronDown, TrendingUp, SearchX, Calendar, ShoppingBag, Stethoscope, GraduationCap, Star, Loader2, AlertCircle, Bed, MapPinOff, EyeOff, RotateCcw } from 'lucide-react';
 
 interface ResultsPanelProps {
     projects: Project[];
@@ -14,6 +14,9 @@ interface ResultsPanelProps {
     onPlaceClick?: (place: NearbyPlace) => void;
     activeTab: 'projects' | 'mall' | 'hospital' | 'school' | 'hotel';
     onPlaceCounts?: (counts: { mall: number; hospital: number; school: number; hotel: number }) => void;
+    excludedCount?: number;
+    onExcludeProject?: (projectId: string) => void;
+    onRestoreAll?: () => void;
 }
 
 // Helper for Distance Calculation
@@ -48,7 +51,10 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
     onPlacesFetched,
     onPlaceClick,
     activeTab,
-    onPlaceCounts
+    onPlaceCounts,
+    excludedCount = 0,
+    onExcludeProject,
+    onRestoreAll
 }) => {
     const [placeSortBy, setPlaceSortBy] = useState<'distance' | 'rating'>('distance');
 
@@ -351,6 +357,23 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                         <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     </div>
                 </div>
+
+                {/* Hidden projects badge */}
+                {activeTab === 'projects' && excludedCount > 0 && (
+                    <div className="px-5 pb-2 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-[10px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1">
+                            <EyeOff className="w-3 h-3" />
+                            <span className="font-bold">{excludedCount} hidden</span>
+                        </div>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onRestoreAll?.(); }}
+                            className="flex items-center gap-1 text-[10px] font-bold text-gray-500 hover:text-scbx transition-colors px-2 py-1 rounded-lg hover:bg-gray-50"
+                        >
+                            <RotateCcw className="w-3 h-3" />
+                            Restore all
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Content List */}
@@ -402,6 +425,16 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                         }
                                     `}
                                 >
+                                    {/* Hide button — visible on hover */}
+                                    {onExcludeProject && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); onExcludeProject(p.projectId); }}
+                                            className="absolute top-2 right-2 z-10 w-6 h-6 rounded-md bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all duration-200"
+                                            title="Hide from analysis"
+                                        >
+                                            <EyeOff className="w-3 h-3" />
+                                        </button>
+                                    )}
                                     {/* Selection Indicator */}
                                     <div className={`absolute left-0 top-2 bottom-2 w-[3px] bg-gradient-to-b from-scbx to-scbx-400 rounded-r-full transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] origin-center ${isSelected ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`} />
 
