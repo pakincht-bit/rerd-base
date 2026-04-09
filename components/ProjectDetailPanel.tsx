@@ -1,12 +1,14 @@
 // ... (imports remain the same)
 import React, { useState, useEffect } from 'react';
 import { Project } from '../types';
-import { X, Copy, Check } from 'lucide-react';
+import { X, Copy, Check, Star } from 'lucide-react';
 
 interface ProjectDetailPanelProps {
     project: Project | null;
     onClose: () => void;
-    className?: string; // Add className prop for dynamic positioning
+    className?: string;
+    isBookmarked?: boolean;
+    onToggleBookmark?: () => void;
 }
 
 // Fixed Color Palette for Types (Updated to Green/Purple Theme)
@@ -79,7 +81,7 @@ const AnimatedCounter = ({ value, decimals = 0, duration = 1200 }: { value: numb
     return <>{(count || 0).toFixed(decimals)}</>;
 };
 
-const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClose, className }) => {
+const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClose, className, isBookmarked = false, onToggleBookmark }) => {
     const [hoveredPoint, setHoveredPoint] = useState<{ x: number, y: number, pointIndex: number, label: string } | null>(null);
     const [copied, setCopied] = useState(false);
 
@@ -478,7 +480,22 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                         {/* Title Row */}
                         <div className="flex items-start justify-between px-7 pt-7 pb-4">
                             <div className="flex-1 min-w-0 pr-4 mt-1">
-                                <h2 className="text-2xl font-medium text-gray-900 dark:text-white leading-tight truncate tracking-tight">{project.name}</h2>
+                                <div className="flex items-center gap-2">
+                                    <h2 className="text-2xl font-medium text-gray-900 dark:text-white leading-tight truncate tracking-tight">{project.name}</h2>
+                                    {onToggleBookmark && (
+                                        <button
+                                            onClick={onToggleBookmark}
+                                            className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
+                                                isBookmarked
+                                                    ? 'bg-amber-50 text-amber-500 hover:bg-amber-100 scale-100'
+                                                    : 'bg-gray-100 text-gray-400 hover:bg-amber-50 hover:text-amber-500'
+                                            }`}
+                                            title={isBookmarked ? 'Remove bookmark' : 'Bookmark this project'}
+                                        >
+                                            <Star className={`w-4 h-4 transition-transform duration-300 ${isBookmarked ? 'scale-110' : 'scale-100'}`} fill={isBookmarked ? 'currentColor' : 'none'} />
+                                        </button>
+                                    )}
+                                </div>
                                 <button
                                     onClick={handleCopyCoords}
                                     className="flex items-center gap-1.5 mt-1.5 text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors group cursor-pointer"

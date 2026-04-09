@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { UploadCloud, X, Loader, RefreshCw, Maximize2, Minimize2, Database } from 'lucide-react';
 import { Project, SearchState, NearbyPlace } from './types';
 import IconSidebar, { SidebarTab } from './components/IconSidebar';
@@ -9,7 +9,10 @@ import ResultsPanel from './components/FilterModal';
 import ExportDashboard from './components/ExportDashboard';
 import FloatingFilterBar from './components/FloatingFilterBar';
 import WelcomeModal from './components/WelcomeModal';
+import AuthModal from './components/AuthModal';
+import { useAuth } from './services/AuthContext';
 import { parseCSV, parseCSVFromText } from './services/csvService';
+import { fetchBookmarks, addBookmark, removeBookmark } from './services/bookmarkService';
 import html2canvas from 'html2canvas';
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -23,6 +26,9 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 }
 
 const App: React.FC = () => {
+    const { user, profile, signOut } = useAuth();
+    const [showAuthModal, setShowAuthModal] = useState(false);
+
     const [projects, setProjects] = useState<Project[]>([]);
     const [fileName, setFileName] = useState<string>('');
     const [loading, setLoading] = useState(false);
@@ -59,12 +65,58 @@ const App: React.FC = () => {
     const [toastMessage, setToastMessage] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<SidebarTab>('projects');
     const [placeCounts, setPlaceCounts] = useState({ mall: 0, hospital: 0, school: 0, hotel: 0 });
-    const [visibleLayers, setVisibleLayers] = useState({ projects: true, mall: true, hospital: true, school: true, hotel: true });
+    const [visibleLayers, setVisibleLayers] = useState({ projects: true, mall: false, hospital: false, school: false, hotel: false });
     const [focusMode, setFocusMode] = useState(false);
     const [rulerActive, setRulerActive] = useState(false);
     const [rulerPoints, setRulerPoints] = useState<{ a: [number, number] | null; b: [number, number] | null }>({ a: null, b: null });
     const [showWelcomeModal, setShowWelcomeModal] = useState(false);
     const [excludedProjectIds, setExcludedProjectIds] = useState<Set<string>>(new Set());
+    const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
+
+    // Fetch bookmarks when user signs in
+    useEffect(() => {
+        if (user) {
+            fetchBookmarks(user.id).then(ids => {
+                setBookmarkedIds(new Set(ids));
+            });
+        } else {
+            setBookmarkedIds(new Set());
+        }
+    }, [user]);
+
+    const toggleBookmark = useCallback(async (projectId: string) => {
+        if (!user) {
+            setShowAuthModal(true);
+            return;
+        }
+        const isCurrentlyBookmarked = bookmarkedIds.has(projectId);
+        // Optimistic update
+        setBookmarkedIds(prev => {
+            const next = new Set(prev);
+            if (isCurrentlyBookmarked) {
+                next.delete(projectId);
+            } else {
+                next.add(projectId);
+            }
+            return next;
+        });
+        // Persist to Supabase
+        const success = isCurrentlyBookmarked
+            ? await removeBookmark(user.id, projectId)
+            : await addBookmark(user.id, projectId);
+        if (!success) {
+            // Revert on failure
+            setBookmarkedIds(prev => {
+                const next = new Set(prev);
+                if (isCurrentlyBookmarked) {
+                    next.add(projectId);
+                } else {
+                    next.delete(projectId);
+                }
+                return next;
+            });
+        }
+    }, [user, bookmarkedIds]);
 
     useEffect(() => {
         const hasSeenWelcome = localStorage.getItem('radia_welcome_v2');
@@ -102,11 +154,49 @@ const App: React.FC = () => {
         localStorage.setItem('theme', 'light');
     }, []);
 
-    const projectsInView = useMemo(() => {
-        let data = projects.map(p => ({
+    const projectsWithDistance = useMemo(() => {
+        return projects.map(p => ({
             ...p,
             distance: calculateDistance(searchState.lat, searchState.lng, p.lat, p.lng)
         }));
+    }, [projects, searchState.lat, searchState.lng]);
+
+    const sortProjects = useCallback((data: Project[]) => {
+        return [...data].sort((a, b) => {
+            if (searchState.sortBy === 'percentSold') return parseFloat(b.percentSold) - parseFloat(a.percentSold);
+            if (searchState.sortBy === 'speed6m') return parseFloat(b.saleSpeed6m) - parseFloat(a.saleSpeed6m);
+            if (searchState.sortBy === 'speed') return parseFloat(b.saleSpeed) - parseFloat(a.saleSpeed);
+            if (searchState.sortBy === 'unitLeft') {
+                const leftA = a.totalUnits - a.soldUnits;
+                const leftB = b.totalUnits - b.soldUnits;
+                return leftB - leftA;
+            }
+            if (searchState.sortBy === 'launchDate') {
+                const getLaunch = (p: Project) => {
+                    const dates = p.subUnits.map(u => u.launchDate).filter(d => d && d !== '-').sort();
+                    return dates.length > 0 ? dates[0] : '';
+                };
+                const dateA = getLaunch(a);
+                const dateB = getLaunch(b);
+                return dateB.localeCompare(dateA);
+            }
+            if (searchState.sortBy === 'priceAsc' || searchState.sortBy === 'priceDesc') {
+                const getPrice = (p: Project) => {
+                    const prices = p.subUnits.map(u => u.price).filter(x => x > 0);
+                    return prices.length > 0 ? Math.min(...prices) : 0;
+                };
+                const priceA = getPrice(a);
+                const priceB = getPrice(b);
+                if (priceA === 0 && priceB > 0) return 1;
+                if (priceB === 0 && priceA > 0) return -1;
+                return searchState.sortBy === 'priceAsc' ? priceA - priceB : priceB - priceA;
+            }
+            return (a.distance || 0) - (b.distance || 0);
+        });
+    }, [searchState.sortBy]);
+
+    const projectsInView = useMemo(() => {
+        let data = [...projectsWithDistance];
 
         if (searchState.searchMode === 'location') {
             data = data.filter(p => (p.distance || 0) <= searchState.radius);
@@ -185,38 +275,13 @@ const App: React.FC = () => {
         if (searchState.codeFilter.length > 0) {
             data = data.filter(p => searchState.codeFilter.includes(p.code));
         }
-        return data.sort((a, b) => {
-            if (searchState.sortBy === 'percentSold') return parseFloat(b.percentSold) - parseFloat(a.percentSold);
-            if (searchState.sortBy === 'speed6m') return parseFloat(b.saleSpeed6m) - parseFloat(a.saleSpeed6m);
-            if (searchState.sortBy === 'speed') return parseFloat(b.saleSpeed) - parseFloat(a.saleSpeed);
-            if (searchState.sortBy === 'unitLeft') {
-                const leftA = a.totalUnits - a.soldUnits;
-                const leftB = b.totalUnits - b.soldUnits;
-                return leftB - leftA;
-            }
-            if (searchState.sortBy === 'launchDate') {
-                const getLaunch = (p: Project) => {
-                    const dates = p.subUnits.map(u => u.launchDate).filter(d => d && d !== '-').sort();
-                    return dates.length > 0 ? dates[0] : '';
-                };
-                const dateA = getLaunch(a);
-                const dateB = getLaunch(b);
-                return dateB.localeCompare(dateA);
-            }
-            if (searchState.sortBy === 'priceAsc' || searchState.sortBy === 'priceDesc') {
-                const getPrice = (p: Project) => {
-                    const prices = p.subUnits.map(u => u.price).filter(x => x > 0);
-                    return prices.length > 0 ? Math.min(...prices) : 0;
-                };
-                const priceA = getPrice(a);
-                const priceB = getPrice(b);
-                if (priceA === 0 && priceB > 0) return 1;
-                if (priceB === 0 && priceA > 0) return -1;
-                return searchState.sortBy === 'priceAsc' ? priceA - priceB : priceB - priceA;
-            }
-            return (a.distance || 0) - (b.distance || 0);
-        });
-    }, [projectsInView, searchState.codeFilter, searchState.sortBy, excludedProjectIds]);
+        return sortProjects(data);
+    }, [projectsInView, searchState.codeFilter, sortProjects, excludedProjectIds]);
+
+    const bookmarkedProjects = useMemo(() => {
+        const bookmarked = projectsWithDistance.filter(p => bookmarkedIds.has(p.projectId));
+        return sortProjects(bookmarked);
+    }, [projectsWithDistance, bookmarkedIds, sortProjects]);
 
     const availableTypes = useMemo(() => {
         const types = new Set<string>();
@@ -348,6 +413,7 @@ const App: React.FC = () => {
                 <MapComponent
                     center={[searchState.lat, searchState.lng]}
                     projects={filteredProjects}
+                    bookmarkedProjects={bookmarkedProjects}
                     radius={searchState.radius}
                     searchMode={searchState.searchMode}
                     hoveredProjectId={hoveredProjectId}
@@ -359,6 +425,10 @@ const App: React.FC = () => {
                     rulerActive={rulerActive}
                     rulerPoints={rulerPoints}
                     setRulerPoints={setRulerPoints}
+                    bookmarkedIds={bookmarkedIds}
+                    onToggleBookmark={toggleBookmark}
+                    isSignedIn={!!user}
+                    onSignInClick={() => setShowAuthModal(true)}
                     onExcludeProject={(id) => {
                         setExcludedProjectIds(prev => {
                             const next = new Set(prev);
@@ -389,6 +459,10 @@ const App: React.FC = () => {
                     onToggleLayer={toggleLayer}
                     onFeedbackClick={() => setShowFeedbackModal(true)}
                     onWhatsNewClick={() => setShowWelcomeModal(true)}
+                    user={user}
+                    profile={profile}
+                    onSignInClick={() => setShowAuthModal(true)}
+                    onSignOut={signOut}
                 />
             </div>
 
@@ -421,6 +495,7 @@ const App: React.FC = () => {
             >
                 <ResultsPanel
                     projects={filteredProjects}
+                    bookmarkedProjects={bookmarkedProjects}
                     totalCount={filteredProjects.length}
                     searchState={searchState}
                     setSearchState={setSearchState}
@@ -444,6 +519,10 @@ const App: React.FC = () => {
                         setExcludedProjectIds(new Set());
                         showToast('All hidden projects restored');
                     }}
+                    bookmarkedIds={bookmarkedIds}
+                    onToggleBookmark={toggleBookmark}
+                    isSignedIn={!!user}
+                    onSignInClick={() => setShowAuthModal(true)}
                 />
             </div>
 
@@ -453,6 +532,10 @@ const App: React.FC = () => {
                     project={selectedProject}
                     onClose={() => setSelectedProject(null)}
                     className={`left-3 md:left-[452px]`}
+                    isBookmarked={selectedProject ? bookmarkedIds.has(selectedProject.projectId) : false}
+                    onToggleBookmark={() => {
+                        if (selectedProject) toggleBookmark(selectedProject.projectId);
+                    }}
                 />
             </div>
 
@@ -554,6 +637,10 @@ const App: React.FC = () => {
                     localStorage.setItem('radia_welcome_v2', 'true');
                     setShowWelcomeModal(false);
                 }} />
+            )}
+
+            {showAuthModal && (
+                <AuthModal onClose={() => setShowAuthModal(false)} />
             )}
         </div>
     );

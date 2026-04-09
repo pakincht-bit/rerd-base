@@ -11,8 +11,10 @@ Radia is a real estate market analysis dashboard built with **React + TypeScript
 - **Styling**: Tailwind CSS (CDN) — NOT bundled, loaded via `<script>` tag in `index.html`
 - **Map**: Leaflet + react-leaflet
 - **Icons**: lucide-react
-- **Fonts**: Google Fonts (Sarabun)
+- **Fonts**: Google Fonts (Plus Jakarta Sans, IBM Plex Sans Thai)
 - **Data**: CSV parsing via PapaParse
+- **Auth & Backend**: Supabase (Auth + Database + Storage)
+- **AI**: Google Gemini via `@google/genai`
 
 ## Architecture
 
@@ -36,18 +38,21 @@ Radia is a real estate market analysis dashboard built with **React + TypeScript
 | Component | File | Purpose |
 |-----------|------|---------|
 | App | `App.tsx` | Main layout, state management, data filtering |
-| IconSidebar | `components/IconSidebar.tsx` | Slim left sidebar with logo + category tabs |
+| IconSidebar | `components/IconSidebar.tsx` | Slim left sidebar with logo + category tabs + user avatar |
 | FloatingFilterBar | `components/FloatingFilterBar.tsx` | Bottom floating bar with search & filter popovers |
 | ResultsPanel | `components/FilterModal.tsx` | Property/place list with sort controls |
 | MapComponent | `components/Map.tsx` | Leaflet map with markers, layers, legend |
 | ProjectDetailPanel | `components/ProjectDetailPanel.tsx` | Detailed project info + trend charts |
 | ExportDashboard | `components/ExportDashboard.tsx` | Export view for dashboard image |
+| AuthModal | `components/AuthModal.tsx` | Sign in/up modal (Google OAuth + email/password) |
+| AuthProvider | `services/AuthContext.tsx` | Auth context provider, `useAuth()` hook, profile management |
 
 ### State Flow
 
 - **Search/filter state** (`SearchState`) lives in `App.tsx` and is passed down to all components
 - **`activeTab`** (projects/mall/hospital/school) is lifted to `App.tsx`, shared between `IconSidebar` and `ResultsPanel`
 - **Nearby places** (OSM data) are fetched inside `ResultsPanel` and lifted to `App.tsx` via callbacks
+- **Auth state** lives in `AuthContext` (`services/AuthContext.tsx`). `useAuth()` provides `user`, `profile`, `signOut`, etc. `AuthProvider` wraps `<App />` in `index.tsx`.
 
 ## Design Guidelines
 
@@ -86,3 +91,8 @@ npm run build  # Production build
 - **Ruler tool**: Activated via `R` hotkey or FloatingFilterBar emoji button. State (`rulerActive`, `rulerPoints`) lives in `App.tsx`. Renders a ruler-style line with tick marks and distance labels on the map.
 - **Feedback Center**: Full-page overlay (`FeedbackWidget.tsx`) with Community Requests feed, submission form, and Changelog timeline.
 - **Changelog**: Always update `data/changelogData.ts` with newly implemented features and fixes at the end of a successful implementation session.
+- **Auth**: Supabase Auth with Google OAuth + email/password. `AuthProvider` in `index.tsx`, `useAuth()` hook for access. Profile auto-created on first sign-in. User avatar shown at bottom of `IconSidebar`.
+- **Error messages**: Map raw Supabase/API error strings to user-friendly messages using a `friendlyError()` helper pattern (see `AuthModal.tsx`). Never show raw technical errors to users.
+- **Supabase client**: `services/supabaseClient.ts` exports `supabase` client and `isSupabaseConfigured` boolean. App must work gracefully when Supabase is not configured (dummy fallback).
+- **SQL migrations**: Stored in `supabase/migrations/`. Instructions to run them manually in Supabase Dashboard SQL Editor.
+- **Environment variables**: Vite env vars prefixed with `VITE_`. Type declarations in `env.d.ts`. Current vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.

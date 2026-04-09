@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Circle, Polyline, useMap, Tooltip, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
+import { Star, EyeOff, Copy, Check } from 'lucide-react';
 import { NearbyPlace, Project } from '../types';
 
 
@@ -57,23 +58,23 @@ const getBaseHue = (letter: string) => {
 // Generate Color: Same Hue for same letter, varied lightness/text for number
 const generateCodeColor = (code: string): { bg: string, text: string } => {
     if (!code) return { bg: '#6B7280', text: 'white' };
-    
+
     // Extract letter and number
     const match = code.match(/^([A-Za-z]+)(\d*)/);
     const letter = match ? match[1] : code.charAt(0);
     // Default to 0 if no number found
     const number = match && match[2] ? parseInt(match[2], 10) : 0;
-    
+
     const baseHue = getBaseHue(letter);
-    
+
     // Strategy for Distinction:
     // 1. Lightness Alternation: Even numbers = Light (Dark Text), Odd numbers = Dark (Light Text)
     //    This creates high contrast between sequential codes (e.g. A1 vs A2).
     const isEven = number % 2 === 0;
-    
+
     // Add noise to lightness (0-15%)
     const noise = (number * 17) % 15;
-    
+
     let lightness, textColor;
     if (isEven) {
         // Light Background: 70-85%
@@ -84,17 +85,17 @@ const generateCodeColor = (code: string): { bg: string, text: string } => {
         lightness = 30 + noise;
         textColor = '#FFFFFF'; // White
     }
-    
+
     // Saturation: Keep relatively high for vibrancy (65-90%)
     const saturation = 65 + ((number * 7) % 25);
-    
+
     // Hue Shift: Small wobble (+/- 10 deg) to differentiate further without changing color family
     const hueShift = ((number * 3) % 20) - 10;
     const hue = (baseHue + hueShift + 360) % 360;
-    
-    return { 
-        bg: `hsl(${hue}, ${saturation}%, ${lightness}%)`, 
-        text: textColor 
+
+    return {
+        bg: `hsl(${hue}, ${saturation}%, ${lightness}%)`,
+        text: textColor
     };
 };
 
@@ -113,6 +114,11 @@ interface MapProps {
     rulerPoints: { a: [number, number] | null; b: [number, number] | null };
     setRulerPoints: React.Dispatch<React.SetStateAction<{ a: [number, number] | null; b: [number, number] | null }>>;
     onExcludeProject?: (projectId: string) => void;
+    bookmarkedIds?: Set<string>;
+    bookmarkedProjects?: Project[];
+    onToggleBookmark?: (projectId: string) => void;
+    isSignedIn?: boolean;
+    onSignInClick?: () => void;
 }
 
 // Component to handle map movements
@@ -120,7 +126,7 @@ const MapUpdater: React.FC<{ center: [number, number]; zoom: number }> = ({ cent
     const map = useMap();
     useEffect(() => {
         map.flyTo(center, zoom);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [center[0], center[1], zoom, map]);
     return null;
 };
@@ -130,7 +136,7 @@ const MapUpdater: React.FC<{ center: [number, number]; zoom: number }> = ({ cent
 // Component to fix rendering issues by invalidating size on resize
 const MapResizer: React.FC = () => {
     const map = useMap();
-    
+
     useEffect(() => {
         // 1. Force invalidate immediately on mount
         map.invalidateSize();
@@ -272,33 +278,42 @@ const createPlaceIcon = (type: string, isHovered: boolean) => {
 
 
 // Custom Project Numbered Icon with Color
-const createProjectIcon = (index: number, isHovered: boolean, bgColor: string, textColor: string) => {
-    const baseClass = "inner-marker font-bold text-sm px-2 py-1 rounded-lg shadow-md border transition-all cursor-pointer whitespace-nowrap overflow-hidden min-w-[32px] text-center flex items-center justify-center";
-    
+const createProjectIcon = (index: number, isHovered: boolean, bgColor: string, textColor: string, isBookmarked: boolean = false) => {
+    const borderClass = isBookmarked ? "border-2 border-amber-400" : "border border-white";
+    const shadowClass = isBookmarked ? "shadow-[0_0_12px_rgba(251,191,36,0.5)]" : "shadow-md";
+
+    const baseClass = `inner-marker font-bold text-sm px-2 py-1 rounded-lg ${borderClass} ${shadowClass} transition-all cursor-pointer whitespace-nowrap overflow-hidden min-w-[32px] text-center flex items-center justify-center`;
+
     // Scale on hover
     const scaleClass = isHovered ? "scale-125 z-50 ring-2 ring-white" : "";
-    
-    // Determine border color for contrast against map. 
-    // White border pops on dark bg. On light bg, white border is subtle, but clean.
-    const borderColor = 'white';
+
+    // Larger star badge for bookmarked projects
+    const bookmarkHtml = isBookmarked ? `
+        <div class="absolute -top-2 -right-2 w-5 h-5 bg-amber-400 rounded-full border-2 border-white flex items-center justify-center shadow-sm z-10" style="color: white; transform: rotate(15deg);">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+    ` : '';
 
     const html = `
-        <div 
-            class="${baseClass} ${scaleClass}" 
-            style="background-color: ${bgColor}; color: ${textColor}; border-color: ${borderColor};"
-        >
-            ${index + 1}
+        <div class="relative ${scaleClass}">
+            <div 
+                class="${baseClass}" 
+                style="background-color: ${bgColor}; color: ${textColor};"
+            >
+                ${index + 1}
+            </div>
+            ${bookmarkHtml}
         </div>`;
     return L.divIcon({ html, className: 'custom-label-icon', iconSize: [0, 0], iconAnchor: [16, 10] });
 };
 
-const MapComponent: React.FC<MapProps> = ({ 
-    center, 
-    projects, 
-    radius, 
-    searchMode, 
-    onMarkerClick, 
-    hoveredProjectId, 
+const MapComponent: React.FC<MapProps> = ({
+    center,
+    projects,
+    radius,
+    searchMode,
+    onMarkerClick,
+    hoveredProjectId,
     activeProject,
     nearbyPlaces = [],
     activePlace,
@@ -306,35 +321,72 @@ const MapComponent: React.FC<MapProps> = ({
     rulerActive,
     rulerPoints,
     setRulerPoints,
-    onExcludeProject
+    onExcludeProject,
+    bookmarkedIds = new Set(),
+    bookmarkedProjects = [],
+    onToggleBookmark,
+    isSignedIn = false,
+    onSignInClick
 }) => {
 
+    // State for "Copied!" feedback inside project popups
+    const [copiedProjectId, setCopiedProjectId] = useState<string | null>(null);
+
+    // Custom hover popover state (rendered outside MapContainer for full React control)
+    const [hoverPopover, setHoverPopover] = useState<{ project: Project; x: number; y: number } | null>(null);
+    const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const clearHoverTimeout = useCallback(() => {
+        if (hoverTimeoutRef.current) {
+            clearTimeout(hoverTimeoutRef.current);
+            hoverTimeoutRef.current = null;
+        }
+    }, []);
+
+    const scheduleHoverClose = useCallback(() => {
+        clearHoverTimeout();
+        hoverTimeoutRef.current = setTimeout(() => {
+            setHoverPopover(null);
+        }, 150);
+    }, [clearHoverTimeout]);
+
+    // Cleanup timeout on unmount
+    useEffect(() => {
+        return () => { clearHoverTimeout(); };
+    }, [clearHoverTimeout]);
+
+
+    const mapProjects = useMemo(() => {
+        const set = new Set(projects.map(p => p.projectId));
+        const extra = bookmarkedProjects.filter(p => !set.has(p.projectId));
+        return [...projects, ...extra];
+    }, [projects, bookmarkedProjects]);
 
     // Generate colors for each code
     const codeColorMap = useMemo(() => {
         const map: Record<string, { bg: string, text: string }> = {};
-        projects.forEach(p => {
+        mapProjects.forEach(p => {
             if (p.code && !map[p.code]) {
                 map[p.code] = generateCodeColor(p.code);
             }
         });
         return map;
-    }, [projects]);
+    }, [mapProjects]);
 
     const getCodeColor = (code: string) => codeColorMap[code] || { bg: '#6B7280', text: 'white' };
 
     // Calculate Unique Codes for Legend
     const uniqueCodes = useMemo(() => {
         if (!visibleLayers.projects) return [];
-        const codes = new Set(projects.map(p => p.code).filter(Boolean));
+        const codes = new Set(mapProjects.map(p => p.code).filter(Boolean));
         return Array.from(codes).sort((a: string, b: string) => {
-             const matchA = a.match(/^([A-Za-z]+)(\d*)/);
-             const matchB = b.match(/^([A-Za-z]+)(\d*)/);
-             if (matchA && matchB) {
-                 if (matchA[1] !== matchB[1]) return matchA[1].localeCompare(matchB[1]);
-                 return parseInt(matchA[2] || '0') - parseInt(matchB[2] || '0');
-             }
-             return a.localeCompare(b);
+            const matchA = a.match(/^([A-Za-z]+)(\d*)/);
+            const matchB = b.match(/^([A-Za-z]+)(\d*)/);
+            if (matchA && matchB) {
+                if (matchA[1] !== matchB[1]) return matchA[1].localeCompare(matchB[1]);
+                return parseInt(matchA[2] || '0') - parseInt(matchB[2] || '0');
+            }
+            return a.localeCompare(b);
         });
     }, [projects, visibleLayers.projects]);
 
@@ -348,8 +400,7 @@ const MapComponent: React.FC<MapProps> = ({
         setCtxCopied(false);
     }, []);
 
-    // Project-specific right-click context menu
-    const [projectCtxMenu, setProjectCtxMenu] = useState<{ projectId: string; projectName: string; x: number; y: number } | null>(null);
+
 
     const handleCtxCopy = useCallback(() => {
         if (!ctxMenu) return;
@@ -383,20 +434,20 @@ const MapComponent: React.FC<MapProps> = ({
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
                 />
-                
+
                 <MapUpdater center={center} zoom={searchMode === 'code' ? 12 : 14} />
 
                 <MapResizer />
                 <ProjectFlyTo project={activeProject} place={activePlace} />
-                <MapContextMenuListener onContextMenu={handleCtxOpen} onClose={() => { closeCtxMenu(); setProjectCtxMenu(null); }} />
+                <MapContextMenuListener onContextMenu={handleCtxOpen} onClose={closeCtxMenu} />
 
                 {searchMode === 'location' && (
                     <>
                         <Marker position={center} icon={createUserIcon()} zIndexOffset={1000} />
-                        <Circle 
-                            center={center} 
-                            radius={radius * 1000} 
-                            pathOptions={{ color: '#222', fillColor: '#222', fillOpacity: 0.05, weight: 1.5, dashArray: '5, 5' }} 
+                        <Circle
+                            center={center}
+                            radius={radius * 1000}
+                            pathOptions={{ color: '#222', fillColor: '#222', fillOpacity: 0.05, weight: 1.5, dashArray: '5, 5' }}
                         />
                     </>
                 )}
@@ -412,7 +463,7 @@ const MapComponent: React.FC<MapProps> = ({
                             icon={createPlaceIcon(place.type, isHovered)}
                             zIndexOffset={isHovered ? 800 : 50}
                         >
-                             <Tooltip direction="top" offset={[0, -15]} opacity={1}>
+                            <Tooltip direction="top" offset={[0, -15]} opacity={1}>
                                 <div className="text-center">
                                     <span className="font-bold text-gray-900 block text-xs whitespace-nowrap">{place.name}</span>
                                     <span className="text-[10px] text-gray-500 capitalize">{place.type}</span>
@@ -423,7 +474,7 @@ const MapComponent: React.FC<MapProps> = ({
                 })}
 
                 {/* Render Projects */}
-                {visibleLayers.projects && projects.map((p, idx) => {
+                {visibleLayers.projects && mapProjects.map((p, idx) => {
                     const isHovered = hoveredProjectId === p.projectId;
                     const colors = getCodeColor(p.code);
 
@@ -434,73 +485,42 @@ const MapComponent: React.FC<MapProps> = ({
                         return null;
                     }
 
-                    const icon = createProjectIcon(idx, isHovered, colors.bg, colors.text);
+                    const isBookmarked = bookmarkedIds.has(p.projectId);
+                    const icon = createProjectIcon(idx, isHovered, colors.bg, colors.text, isBookmarked);
 
                     return (
-                        <Marker 
-                            key={p.projectId} 
-                            position={[p.lat, p.lng]} 
+                        <Marker
+                            key={p.projectId}
+                            position={[p.lat, p.lng]}
                             icon={icon}
-                            zIndexOffset={isHovered ? 1000 : 100}
+                            zIndexOffset={isHovered ? 1000 : (isBookmarked ? 400 : 100)}
                             eventHandlers={{
                                 click: () => onMarkerClick(p),
-                                contextmenu: (e) => {
-                                    e.originalEvent.preventDefault();
-                                    e.originalEvent.stopPropagation();
-                                    const map = e.target._map;
-                                    const point = map.latLngToContainerPoint(e.latlng);
-                                    setProjectCtxMenu({ projectId: p.projectId, projectName: p.name, x: point.x, y: point.y });
-                                    setCtxMenu(null); // close coordinate menu if open
-                                },
                                 mouseover: (e) => {
-                                    const icon = e.target.getElement();
-                                    if(icon) icon.classList.add('marker-hover');
+                                    const iconEl = e.target.getElement();
+                                    if (iconEl) iconEl.classList.add('marker-hover');
+                                    // Show custom hover popover — get actual screen position of marker
+                                    clearHoverTimeout();
+                                    const innerEl = iconEl?.querySelector('.inner-marker') as HTMLElement | null;
+                                    const targetEl = innerEl || iconEl;
+                                    if (targetEl) {
+                                        const rect = targetEl.getBoundingClientRect();
+                                        // Position at the top-center of the marker rectangle (viewport coords)
+                                        setHoverPopover({
+                                            project: p,
+                                            x: rect.left + rect.width / 2,
+                                            y: rect.top
+                                        });
+                                    }
                                 },
                                 mouseout: (e) => {
-                                    const icon = e.target.getElement();
-                                    if(icon) icon.classList.remove('marker-hover');
+                                    const iconEl = e.target.getElement();
+                                    if (iconEl) iconEl.classList.remove('marker-hover');
+                                    // Delayed close — gives user time to move cursor into the popover
+                                    scheduleHoverClose();
                                 }
                             }}
-                        >
-                             <Tooltip direction="top" offset={[0, -20]} opacity={1}>
-                                <div className="px-1 min-w-[180px]">
-                                    <div className="text-center mb-1.5 pb-1.5 border-b border-gray-100">
-                                        <span className="font-bold text-gray-900 block text-sm whitespace-nowrap">{p.name}</span>
-                                        <span className="text-[10px] text-gray-500 block">{p.developer}</span>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
-                                        <div>
-                                            <span className="text-gray-400">Price (MB)</span>
-                                            <span className="block font-bold text-gray-800">{p.priceRange || '-'}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-gray-400">Sold</span>
-                                            <span className={`block font-bold ${parseFloat(p.percentSold) >= 80 ? 'text-green-600' : parseFloat(p.percentSold) >= 50 ? 'text-amber-600' : 'text-gray-800'}`}>{parseFloat(p.percentSold).toFixed(1)}%</span>
-                                        </div>
-                                        <div>
-                                            {(() => {
-                                                const remaining = p.totalUnits - p.soldUnits;
-                                                const validPrices = p.subUnits.map(u => u.price).filter(x => x > 0);
-                                                if (remaining <= 0 || validPrices.length === 0) return (
-                                                    <><span className="text-gray-400">Remaining</span><span className="block font-bold text-gray-800">Sold out</span></>
-                                                );
-                                                const avgPrice = validPrices.reduce((s, v) => s + v, 0) / validPrices.length;
-                                                const val = remaining * avgPrice;
-                                                const unit = val >= 1000 ? 'B' : 'MB';
-                                                const display = val >= 1000 ? Math.round(val / 1000).toLocaleString() : Math.round(val).toLocaleString();
-                                                return (
-                                                    <><span className="text-gray-400">Remaining ({unit})</span><span className="block font-bold text-gray-800">{display}</span></>
-                                                );
-                                            })()}
-                                        </div>
-                                        <div>
-                                            <span className="text-gray-400">Speed/yr</span>
-                                            <span className="block font-bold text-gray-800">{parseFloat(p.saleSpeed) > 0 ? `${parseFloat(p.saleSpeed).toFixed(1)}%` : '-'}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </Tooltip>
-                        </Marker>
+                        />
                     );
                 })}
 
@@ -631,8 +651,8 @@ const MapComponent: React.FC<MapProps> = ({
                         const colors = getCodeColor(code);
                         return (
                             <div key={code} className="flex items-center gap-3">
-                                <span 
-                                    className="w-4 h-4 rounded-md shadow-sm shrink-0 border border-black/10 flex items-center justify-center text-[8px] font-bold" 
+                                <span
+                                    className="w-4 h-4 rounded-md shadow-sm shrink-0 border border-black/10 flex items-center justify-center text-[8px] font-bold"
                                     style={{ backgroundColor: colors.bg, color: colors.text }}
                                 >
                                     {/* Optional: Add dot or letter inside legend color box for reference */}
@@ -645,7 +665,7 @@ const MapComponent: React.FC<MapProps> = ({
             )}
 
             {/* Right-click coordinate popup (rendered outside MapContainer) */}
-            {ctxMenu && !projectCtxMenu && (
+            {ctxMenu && (
                 <div
                     className="absolute z-[1000] bg-white/95 backdrop-blur-xl rounded-xl shadow-premium border border-gray-100/50 py-2 px-3 min-w-[180px]"
                     style={{ left: ctxMenu.x, top: ctxMenu.y, transform: 'translate(-50%, -100%) translateY(-8px)' }}
@@ -656,11 +676,10 @@ const MapComponent: React.FC<MapProps> = ({
                     </div>
                     <button
                         onClick={handleCtxCopy}
-                        className={`w-full text-[11px] font-bold py-1.5 rounded-lg transition-all ${
-                            ctxCopied
-                                ? 'bg-green-50 text-green-600 border border-green-200'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
-                        }`}
+                        className={`w-full text-[11px] font-bold py-1.5 rounded-lg transition-all ${ctxCopied
+                            ? 'bg-green-50 text-green-600 border border-green-200'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                            }`}
                     >
                         {ctxCopied ? '✓ Copied!' : 'Copy Coordinates'}
                     </button>
@@ -668,37 +687,132 @@ const MapComponent: React.FC<MapProps> = ({
                 </div>
             )}
 
-            {/* Right-click project context menu */}
-            {projectCtxMenu && (
-                <div
-                    className="absolute z-[1000] bg-white/95 backdrop-blur-xl rounded-xl shadow-premium border border-gray-100/50 py-2 px-1 min-w-[200px]"
-                    style={{ left: projectCtxMenu.x, top: projectCtxMenu.y, transform: 'translate(-50%, -100%) translateY(-8px)' }}
-                >
-                    <div className="px-2.5 pb-1.5 mb-1 border-b border-gray-100">
-                        <div className="text-[10px] font-medium text-gray-400">Project</div>
-                        <div className="text-xs font-bold text-gray-800 truncate max-w-[180px]">{projectCtxMenu.projectName}</div>
-                    </div>
-                    <button
-                        onClick={() => {
-                            if (onExcludeProject) onExcludeProject(projectCtxMenu.projectId);
-                            setProjectCtxMenu(null);
-                        }}
-                        className="w-full text-left text-[11px] font-medium py-1.5 px-2.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+            {/* Hover popover for project markers (rendered outside MapContainer) */}
+            {hoverPopover && (() => {
+                const p = hoverPopover.project;
+                return (
+                    <div
+                        className="fixed z-[900]"
+                        style={{ left: hoverPopover.x, top: hoverPopover.y, transform: 'translate(-50%, -100%) translateY(-6px)' }}
+                        onMouseEnter={clearHoverTimeout}
+                        onMouseLeave={scheduleHoverClose}
                     >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                        Hide from analysis
-                    </button>
-                    <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b border-r border-gray-100/50 rotate-45" />
-                </div>
-            )}
+                        {/* Invisible bridge area connecting arrow to marker for seamless hover */}
+                        <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 w-16 h-8" />
+                        
+                        <div className="relative animate-fadeInUp origin-bottom">
+                        <div className="bg-white/95 backdrop-blur-xl rounded-xl shadow-premium border border-gray-100/50 py-2 px-3 min-w-[220px]">
+                            <div className="text-center mb-1.5 pb-1.5 border-b border-gray-100">
+                                <span className="font-bold text-gray-900 block text-sm whitespace-nowrap">{p.name}</span>
+                                <span className="text-[10px] text-gray-500 block">{p.developer}</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+                                <div>
+                                    <span className="text-gray-400">Price (MB)</span>
+                                    <span className="block font-bold text-gray-800">{p.priceRange || '-'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-gray-400">Sold</span>
+                                    <span className={`block font-bold ${parseFloat(p.percentSold) >= 80 ? 'text-green-600' : parseFloat(p.percentSold) >= 50 ? 'text-amber-600' : 'text-gray-800'}`}>{parseFloat(p.percentSold).toFixed(1)}%</span>
+                                </div>
+                                <div>
+                                    {(() => {
+                                        const remaining = p.totalUnits - p.soldUnits;
+                                        const validPrices = p.subUnits.map(u => u.price).filter(x => x > 0);
+                                        if (remaining <= 0 || validPrices.length === 0) return (
+                                            <><span className="text-gray-400">Remaining</span><span className="block font-bold text-gray-800">Sold out</span></>
+                                        );
+                                        const avgPrice = validPrices.reduce((s, v) => s + v, 0) / validPrices.length;
+                                        const val = remaining * avgPrice;
+                                        const unit = val >= 1000 ? 'B' : 'MB';
+                                        const display = val >= 1000 ? Math.round(val / 1000).toLocaleString() : Math.round(val).toLocaleString();
+                                        return (
+                                            <><span className="text-gray-400">Remaining ({unit})</span><span className="block font-bold text-gray-800">{display}</span></>
+                                        );
+                                    })()}
+                                </div>
+                                <div>
+                                    <span className="text-gray-400">Speed/yr</span>
+                                    <span className="block font-bold text-gray-800">{parseFloat(p.saleSpeed) > 0 ? `${parseFloat(p.saleSpeed).toFixed(1)}%` : '-'}</span>
+                                </div>
+                            </div>
+                            {/* Action buttons */}
+                            <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-1.5">
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        const text = `${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`;
+                                        navigator.clipboard.writeText(text).then(() => {
+                                            setCopiedProjectId(p.projectId);
+                                            setTimeout(() => setCopiedProjectId(null), 1500);
+                                        });
+                                    }}
+                                    className={`flex-1 flex items-center justify-center gap-1.5 text-[10px] font-bold h-7 rounded-lg transition-all ${copiedProjectId === p.projectId
+                                        ? 'bg-green-50 text-green-600 border border-green-200'
+                                        : 'bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-700 border border-gray-100'
+                                        }`}
+                                >
+                                    {copiedProjectId === p.projectId ? (
+                                        <>
+                                            <Check className="w-3 h-3" strokeWidth={3} />
+                                            Copied!
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Copy className="w-3 h-3" />
+                                            Copy lat,long
+                                        </>
+                                    )}
+                                </button>
+                                
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (!isSignedIn) {
+                                            onSignInClick?.();
+                                            return;
+                                        }
+                                        onToggleBookmark?.(p.projectId);
+                                    }}
+                                    className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all duration-200 ${
+                                        bookmarkedIds.has(p.projectId)
+                                            ? 'bg-amber-50 border border-amber-200 text-amber-500'
+                                            : 'bg-gray-50 border border-gray-100 text-gray-400 hover:text-amber-500 hover:border-amber-200 hover:bg-amber-50'
+                                    }`}
+                                    title={bookmarkedIds.has(p.projectId) ? 'Remove bookmark' : 'Bookmark this project'}
+                                >
+                                    <Star className="w-3.5 h-3.5" fill={bookmarkedIds.has(p.projectId) ? 'currentColor' : 'none'} />
+                                </button>
+
+                                {onExcludeProject && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onExcludeProject(p.projectId);
+                                            setHoverPopover(null);
+                                        }}
+                                        className="w-7 h-7 flex items-center justify-center shrink-0 rounded-lg bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-500 border border-gray-100 hover:border-red-200 transition-all"
+                                        title="Hide from analysis"
+                                    >
+                                        <EyeOff className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                        {/* Arrow pointing down to marker */}
+                        <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b border-r border-gray-100/50 rotate-45 z-10" />
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* Ruler instruction banner */}
             {rulerActive && (
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[500] bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-xl shadow-premium border border-gray-100/50 dark:border-gray-700/50 px-5 py-3 flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-scbx/10 flex items-center justify-center shrink-0">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1B333C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/>
-                            <path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/>
+                            <path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z" />
+                            <path d="m14.5 12.5 2-2" /><path d="m11.5 9.5 2-2" /><path d="m8.5 6.5 2-2" /><path d="m17.5 15.5 2-2" />
                         </svg>
                     </div>
                     <div>

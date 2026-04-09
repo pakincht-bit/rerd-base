@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { Project, SearchState, NearbyPlace } from '../types';
-import { ChevronDown, TrendingUp, SearchX, Calendar, ShoppingBag, Stethoscope, GraduationCap, Star, Loader2, AlertCircle, Bed, MapPinOff, EyeOff, RotateCcw } from 'lucide-react';
+import { ChevronDown, TrendingUp, SearchX, Calendar, ShoppingBag, Stethoscope, GraduationCap, Star, Loader2, AlertCircle, Bed, MapPinOff, EyeOff, RotateCcw, Bookmark } from 'lucide-react';
 
 interface ResultsPanelProps {
     projects: Project[];
@@ -17,6 +18,12 @@ interface ResultsPanelProps {
     excludedCount?: number;
     onExcludeProject?: (projectId: string) => void;
     onRestoreAll?: () => void;
+    // Bookmark props
+    bookmarkedIds?: Set<string>;
+    bookmarkedProjects?: Project[];
+    onToggleBookmark?: (projectId: string) => void;
+    isSignedIn?: boolean;
+    onSignInClick?: () => void;
 }
 
 // Helper for Distance Calculation
@@ -40,6 +47,25 @@ const OVERPASS_SERVERS = [
     'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
 ];
 
+// ── Persistent session cache for Overpass responses ──
+// Keyed by rounded "lat,lng,radius" so near-identical queries hit cache.
+// Cache entry stores the raw API data.elements array.
+interface OverpassCacheEntry {
+    elements: any[];
+    timestamp: number;
+}
+const overpassCache = new Map<string, OverpassCacheEntry>();
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minute TTL per cache entry
+const MAX_CACHE_ENTRIES = 30;
+
+// Round to 3 decimals (~110m precision) to catch near-duplicate pans
+const makeCacheKey = (lat: number, lng: number, radius: number) =>
+    `${lat.toFixed(3)},${lng.toFixed(3)},${radius.toFixed(1)}`;
+
+// Throttle: track last network request timestamp to enforce minimum gap
+let lastNetworkRequestTime = 0;
+const MIN_REQUEST_GAP_MS = 10_000; // 10 seconds between actual API calls
+
 const ResultsPanel: React.FC<ResultsPanelProps> = ({
     projects,
     totalCount,
@@ -54,9 +80,15 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
     onPlaceCounts,
     excludedCount = 0,
     onExcludeProject,
-    onRestoreAll
+    onRestoreAll,
+    bookmarkedIds = new Set(),
+    bookmarkedProjects = [],
+    onToggleBookmark,
+    isSignedIn = false,
+    onSignInClick
 }) => {
     const [placeSortBy, setPlaceSortBy] = useState<'distance' | 'rating'>('distance');
+    const [projectListFilter, setProjectListFilter] = useState<'all' | 'saved'>('all');
 
     // Data State
     const [placesData, setPlacesData] = useState<Record<string, NearbyPlace[]>>({
@@ -82,15 +114,100 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
     }, [selectedProjectId, activeTab]);
 
     // Fetch OSM Data (Loads ALL categories at once when location changes)
+    // Features: session cache, 10s throttle between network requests, 1.5s debounce
     useEffect(() => {
         let isMounted = true;
 
-        // Debounce execution to avoid rate limits when sliding or typing quickly
+        // Helper: process raw Overpass elements into categorized NearbyPlace data
+        const processElements = (elements: any[], lat: number, lng: number) => {
+            const newPlaces: Record<string, NearbyPlace[]> = {
+                mall: [],
+                hospital: [],
+                school: [],
+                hotel: []
+            };
+
+            const MALL_REGEX = /mall|department_store/i;
+            const HOSPITAL_REGEX = /hospital/i;
+            const SCHOOL_REGEX = /school|university|college/i;
+            const HOTEL_REGEX = /hotel|hostel|resort|motel|guest_house/i;
+
+            const allPlacesFlat: NearbyPlace[] = [];
+            const seenIds = new Set<string>();
+
+            elements.forEach((el: any) => {
+                if (seenIds.has(String(el.id))) return;
+                seenIds.add(String(el.id));
+
+                const tags = el.tags || {};
+                const name = tags.name || tags["name:en"] || tags["name:th"];
+                if (!name) return;
+
+                const nameLower = name.toLowerCase();
+                const pLat = el.lat || el.center?.lat;
+                const pLng = el.lon || el.center?.lon;
+                if (!pLat || !pLng) return;
+
+                const dist = calculateDistance(lat, lng, pLat, pLng);
+
+                let type: 'mall' | 'hospital' | 'school' | 'hotel' | null = null;
+                if (tags.shop && MALL_REGEX.test(tags.shop)) type = 'mall';
+                else if (tags.amenity && HOSPITAL_REGEX.test(tags.amenity)) type = 'hospital';
+                else if (tags.amenity && SCHOOL_REGEX.test(tags.amenity)) type = 'school';
+                else if (tags.tourism && HOTEL_REGEX.test(tags.tourism)) type = 'hotel';
+                if (!type) return;
+
+                // Filtering logic
+                if (type === 'mall') {
+                    const excludeMalls = [
+                        '7-eleven', '7-11', 'family', 'lawson', 'mini big c',
+                        'lotus\'s go fresh', 'cj', 'tops daily', 'seven eleven', 'jiffy',
+                        'market', 'ตลาด', 'bazaar', 'night market', 'walking street', 'floating market',
+                        'shop', 'store'
+                    ];
+                    if (excludeMalls.some(ex => nameLower.includes(ex))) return;
+                }
+                if (type === 'hospital') {
+                    const excludeHospital = ['animal', 'pet', 'dental', 'clinic', 'คลินิก', 'รักษาสัตว์', 'ทำฟัน', 'ทันตกรรม'];
+                    if (excludeHospital.some(ex => nameLower.includes(ex))) return;
+                }
+                if (type === 'school') {
+                    const excludeSchools = [
+                        'driving', 'music', 'tutor', 'language', 'dance',
+                        'nursery', 'day care', 'gym', 'swim', 'ballet', 'yoga', 'cooking', 'art', 'football', 'soccer', 'tennis', 'badminton', 'taekwondo', 'muay thai',
+                        'บริบาล', 'กวดวิชา', 'สอนขับรถ', 'ดนตรี', 'ภาษา', 'เต้น', 'ว่ายน้ำ', 'ยิม', 'รับเลี้ยงเด็ก', 'เนอสเซอรี่'
+                    ];
+                    if (excludeSchools.some(ex => nameLower.includes(ex))) return;
+                }
+
+                const placeObj: NearbyPlace = {
+                    id: String(el.id),
+                    name: name,
+                    type: type,
+                    distance: parseFloat(dist.toFixed(2)),
+                    rating: 3.5 + Math.random() * 1.5,
+                    address: tags["addr:street"] ? `${tags["addr:street"]} ${tags["addr:city"] || ''}` : "Location details unavailable",
+                    lat: pLat,
+                    lng: pLng
+                };
+
+                newPlaces[type].push(placeObj);
+                allPlacesFlat.push(placeObj);
+            });
+
+            Object.keys(newPlaces).forEach(key => {
+                newPlaces[key].sort((a, b) => a.distance - b.distance);
+            });
+
+            return { newPlaces, allPlacesFlat };
+        };
+
+        // Debounce: 1.5s to prevent spamming while panning/sliding
         const timeoutId = setTimeout(() => {
             const fetchAllPlaces = async () => {
                 const { lat, lng, radius } = searchState;
 
-                // Check if we need to fetch (only if location/radius changed)
+                // Skip if exact same location already fetched
                 if (lastFetchRef.current &&
                     lastFetchRef.current.lat === lat &&
                     lastFetchRef.current.lng === lng &&
@@ -98,17 +215,43 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                     return;
                 }
 
+                const cacheKey = makeCacheKey(lat, lng, radius);
+                const now = Date.now();
+
+                // ── Check session cache first ──
+                const cached = overpassCache.get(cacheKey);
+                if (cached && (now - cached.timestamp) < CACHE_TTL_MS) {
+                    // Cache HIT — use stored data without any network request
+                    const { newPlaces, allPlacesFlat } = processElements(cached.elements, lat, lng);
+                    if (!isMounted) return;
+                    setPlacesData(newPlaces);
+                    lastFetchRef.current = { lat, lng, radius };
+                    if (onPlacesFetched) onPlacesFetched(allPlacesFlat);
+                    return;
+                }
+
+                // ── Throttle: enforce minimum gap between network requests ──
+                const timeSinceLastRequest = now - lastNetworkRequestTime;
+                if (timeSinceLastRequest < MIN_REQUEST_GAP_MS) {
+                    // Too soon — schedule a retry after the cooldown
+                    const retryDelay = MIN_REQUEST_GAP_MS - timeSinceLastRequest + 500;
+                    setTimeout(() => {
+                        if (isMounted) {
+                            // Re-trigger by forcing a state-based re-render isn't ideal,
+                            // so we just silently skip. The next user interaction will trigger it.
+                        }
+                    }, retryDelay);
+                    return;
+                }
+
                 setIsLoading(true);
                 setErrorMsg(null);
-                setPlacesData({ mall: [], hospital: [], school: [], hotel: [] }); // Clear previous data
-
-                // Notify parent to clear map markers temporarily
+                setPlacesData({ mall: [], hospital: [], school: [], hotel: [] });
                 if (onPlacesFetched) onPlacesFetched([]);
 
                 try {
                     const radiusMeters = radius * 1000;
 
-                    // Combined Query for Malls, Hospitals, and Schools
                     const query = `
                         [out:json][timeout:25];
                         (
@@ -134,6 +277,9 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                     let data = null;
                     let success = false;
 
+                    // Mark the network request timestamp BEFORE sending
+                    lastNetworkRequestTime = Date.now();
+
                     // Server Rotation Logic
                     for (const server of OVERPASS_SERVERS) {
                         if (!isMounted) break;
@@ -149,7 +295,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                             if (response.ok) {
                                 data = await response.json();
                                 success = true;
-                                break; // Success! Exit loop
+                                break;
                             } else if (response.status === 429) {
                                 console.warn(`Rate limit (429) on ${server}, trying next mirror...`);
                                 continue;
@@ -169,106 +315,20 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
 
                     if (!isMounted) return;
 
-                    const newPlaces: Record<string, NearbyPlace[]> = {
-                        mall: [],
-                        hospital: [],
-                        school: [],
-                        hotel: []
-                    };
-
-                    const MALL_REGEX = /mall|department_store/i;
-                    const HOSPITAL_REGEX = /hospital/i;
-                    const SCHOOL_REGEX = /school|university|college/i;
-                    const HOTEL_REGEX = /hotel|hostel|resort|motel|guest_house/i;
-
-                    const allPlacesFlat: NearbyPlace[] = [];
-                    const seenIds = new Set<string>();
-
-                    if (data && data.elements) {
-                        data.elements.forEach((el: any) => {
-                            // Prevent duplicates
-                            if (seenIds.has(String(el.id))) return;
-                            seenIds.add(String(el.id));
-
-                            const tags = el.tags || {};
-                            const name = tags.name || tags["name:en"] || tags["name:th"];
-                            // Skip unnamed places
-                            if (!name) return;
-
-                            const nameLower = name.toLowerCase();
-
-                            const pLat = el.lat || el.center?.lat;
-                            const pLng = el.lon || el.center?.lon;
-
-                            if (!pLat || !pLng) return;
-
-                            const dist = calculateDistance(lat, lng, pLat, pLng);
-
-                            // Determine Type
-                            let type: 'mall' | 'hospital' | 'school' | 'hotel' | null = null;
-
-                            // Priority check
-                            if (tags.shop && MALL_REGEX.test(tags.shop)) type = 'mall';
-                            else if (tags.amenity && HOSPITAL_REGEX.test(tags.amenity)) type = 'hospital';
-                            else if (tags.amenity && SCHOOL_REGEX.test(tags.amenity)) type = 'school';
-                            else if (tags.tourism && HOTEL_REGEX.test(tags.tourism)) type = 'hotel';
-
-                            if (!type) return;
-
-                            // --- RELAXED FILTERING LOGIC (Trust tags, exclude obvious bad ones) ---
-
-                            // 1. Malls: Exclude convenience stores AND Markets
-                            if (type === 'mall') {
-                                const excludeMalls = [
-                                    '7-eleven', '7-11', 'family', 'lawson', 'mini big c',
-                                    'lotus\'s go fresh', 'cj', 'tops daily', 'seven eleven', 'jiffy',
-                                    'market', 'ตลาด', 'bazaar', 'night market', 'walking street', 'floating market',
-                                    'shop', 'store' // Generic names
-                                ];
-                                if (excludeMalls.some(ex => nameLower.includes(ex))) return;
-                            }
-
-                            // 2. Hospitals: Exclude Animal Hospitals and Clinics
-                            if (type === 'hospital') {
-                                const excludeHospital = ['animal', 'pet', 'dental', 'clinic', 'คลินิก', 'รักษาสัตว์', 'ทำฟัน', 'ทันตกรรม'];
-                                if (excludeHospital.some(ex => nameLower.includes(ex))) return;
-                            }
-
-                            // 3. Schools: Exclude specialized schools (Driving, Music, etc.)
-                            if (type === 'school') {
-                                const excludeSchools = [
-                                    'driving', 'music', 'tutor', 'language', 'dance',
-                                    'nursery', 'day care', 'gym', 'swim', 'ballet', 'yoga', 'cooking', 'art', 'football', 'soccer', 'tennis', 'badminton', 'taekwondo', 'muay thai',
-                                    'บริบาล', 'กวดวิชา', 'สอนขับรถ', 'ดนตรี', 'ภาษา', 'เต้น', 'ว่ายน้ำ', 'ยิม', 'รับเลี้ยงเด็ก', 'เนอสเซอรี่'
-                                ];
-                                if (excludeSchools.some(ex => nameLower.includes(ex))) return;
-                            }
-
-                            const placeObj: NearbyPlace = {
-                                id: String(el.id),
-                                name: name,
-                                type: type,
-                                distance: parseFloat(dist.toFixed(2)),
-                                rating: 3.5 + Math.random() * 1.5,
-                                address: tags["addr:street"] ? `${tags["addr:street"]} ${tags["addr:city"] || ''}` : "Location details unavailable",
-                                lat: pLat,
-                                lng: pLng
-                            };
-
-                            newPlaces[type].push(placeObj);
-                            allPlacesFlat.push(placeObj);
-                        });
+                    // ── Store in session cache ──
+                    const elements = data.elements || [];
+                    // Evict oldest entries if cache is full
+                    if (overpassCache.size >= MAX_CACHE_ENTRIES) {
+                        const oldestKey = overpassCache.keys().next().value;
+                        if (oldestKey) overpassCache.delete(oldestKey);
                     }
+                    overpassCache.set(cacheKey, { elements, timestamp: Date.now() });
 
-                    // Sort each category by distance
-                    Object.keys(newPlaces).forEach(key => {
-                        newPlaces[key].sort((a, b) => a.distance - b.distance);
-                    });
+                    const { newPlaces, allPlacesFlat } = processElements(elements, lat, lng);
 
                     setPlacesData(newPlaces);
                     lastFetchRef.current = { lat, lng, radius };
 
-                    // Lift state up to App component for the Map
                     if (onPlacesFetched) {
                         onPlacesFetched(allPlacesFlat);
                     }
@@ -282,7 +342,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
             };
 
             fetchAllPlaces();
-        }, 1000); // 1 second debounce to prevent spamming while moving map
+        }, 1500); // 1.5s debounce to prevent spamming while panning map
 
         return () => {
             isMounted = false;
@@ -374,6 +434,59 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                         </button>
                     </div>
                 )}
+
+                {/* All / Saved Toggle Tabs — only in projects tab */}
+                {activeTab === 'projects' && (
+                    <div className="px-5 flex items-center gap-6 -mb-px mt-2">
+                        <button
+                            onClick={() => setProjectListFilter('all')}
+                            className={`py-2 text-[12px] font-bold transition-colors duration-200 relative border-b-2 border-transparent ${
+                                projectListFilter === 'all'
+                                    ? 'text-scbx'
+                                    : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            All Projects
+                            {projectListFilter === 'all' && (
+                                <motion.div 
+                                    layoutId="projectTabIndicator" 
+                                    className="absolute -bottom-[2px] left-0 right-0 h-[2px] bg-scbx rounded-t-full z-10" 
+                                />
+                            )}
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (!isSignedIn) {
+                                    onSignInClick?.();
+                                    return;
+                                }
+                                setProjectListFilter('saved');
+                            }}
+                            className={`py-2 text-[12px] font-bold transition-colors duration-200 flex items-center gap-1.5 relative border-b-2 border-transparent ${
+                                projectListFilter === 'saved'
+                                    ? 'text-scbx'
+                                    : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            Saved
+                            {bookmarkedIds.size > 0 && (
+                                <span className={`min-w-[16px] h-4 px-1 rounded text-[9px] flex items-center justify-center font-bold ml-0.5 transition-colors ${
+                                    projectListFilter === 'saved'
+                                        ? 'bg-scbx/10 text-scbx'
+                                        : 'bg-gray-100 text-gray-500'
+                                }`}>
+                                    {bookmarkedIds.size}
+                                </span>
+                            )}
+                            {projectListFilter === 'saved' && (
+                                <motion.div 
+                                    layoutId="projectTabIndicator" 
+                                    className="absolute -bottom-[2px] left-0 right-0 h-[2px] bg-scbx rounded-t-full z-10" 
+                                />
+                            )}
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Content List */}
@@ -381,9 +494,14 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                 <div className="h-full overflow-y-auto overflow-x-hidden custom-scrollbar">
 
                 {/* PROJECTS TAB */}
-                {activeTab === 'projects' && (
+                {activeTab === 'projects' && (() => {
+                    const displayProjects = projectListFilter === 'saved'
+                        ? bookmarkedProjects
+                        : projects;
+
+                    return (
                     <div className="animate-fadeInUp pb-36">
-                        {projects.map((p, idx) => {
+                        {displayProjects.map((p, idx) => {
                             const isSelected = selectedProjectId === p.projectId;
                             const launchDate = p.subUnits.map(u => u.launchDate).filter(d => d && d !== '-').sort()[0] || '-';
                             const unitLeft = Math.round(p.totalUnits - p.soldUnits);
@@ -425,16 +543,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                         }
                                     `}
                                 >
-                                    {/* Hide button — visible on hover */}
-                                    {onExcludeProject && (
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onExcludeProject(p.projectId); }}
-                                            className="absolute top-2 right-2 z-10 w-6 h-6 rounded-md bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all duration-200"
-                                            title="Hide from analysis"
-                                        >
-                                            <EyeOff className="w-3 h-3" />
-                                        </button>
-                                    )}
+
                                     {/* Selection Indicator */}
                                     <div className={`absolute left-0 top-2 bottom-2 w-[3px] bg-gradient-to-b from-scbx to-scbx-400 rounded-r-full transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] origin-center ${isSelected ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`} />
 
@@ -495,21 +604,67 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                         </div>
                                     </div>
 
-                                    {/* Price & Distance */}
-                                    <div className="text-right w-[100px] shrink-0 flex flex-col items-end justify-start gap-1 pt-0.5">
-                                        <div className="font-medium text-[11px] text-gray-600 dark:text-gray-400 whitespace-nowrap tracking-tight">
+                                    {/* Price & Distance & Actions */}
+                                    <div className="text-right w-[100px] shrink-0 flex flex-col items-end justify-start pt-0.5 overflow-hidden">
+                                        <div className="font-medium text-[11px] text-gray-600 dark:text-gray-400 whitespace-nowrap tracking-tight mb-1">
                                             {displayPrice}
                                         </div>
                                         {searchState.searchMode === 'location' && (
-                                            <div className="text-[9px] text-gray-400 dark:text-gray-500 font-mono font-bold tracking-wider uppercase tabular-nums">
+                                            <div className="text-[9px] text-gray-400 dark:text-gray-500 font-mono font-bold tracking-wider uppercase tabular-nums mb-1">
                                                 {p.distance?.toFixed(1)} km
                                             </div>
                                         )}
+                                        
+                                        {/* Action buttons sitting at the bottom right */}
+                                        <div className="flex items-center gap-1.5 mt-1.5 relative z-10 transition-opacity">
+                                            {onExcludeProject && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); onExcludeProject(p.projectId); }}
+                                                    className="w-6 h-6 rounded-md bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all duration-200"
+                                                    title="Hide from analysis"
+                                                >
+                                                    <EyeOff className="w-3 h-3" />
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (!isSignedIn) {
+                                                        onSignInClick?.();
+                                                        return;
+                                                    }
+                                                    onToggleBookmark?.(p.projectId);
+                                                }}
+                                                className={`w-6 h-6 rounded-md flex items-center justify-center transition-all duration-200 ${
+                                                    bookmarkedIds.has(p.projectId)
+                                                        ? 'bg-amber-50 border border-amber-200 text-amber-500 opacity-100'
+                                                        : 'bg-white border border-gray-200 shadow-sm text-gray-400 hover:text-amber-500 hover:border-amber-200 hover:bg-amber-50 opacity-0 group-hover:opacity-100'
+                                                }`}
+                                                title={bookmarkedIds.has(p.projectId) ? 'Remove bookmark' : 'Bookmark this project'}
+                                            >
+                                                <Star className="w-3 h-3" fill={bookmarkedIds.has(p.projectId) ? 'currentColor' : 'none'} />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             );
                         })}
-                        {projects.length === 0 && (
+                        {displayProjects.length === 0 && projectListFilter === 'saved' && (
+                            <div className="flex flex-col items-center justify-center py-24 px-6 text-center animate-fadeIn group">
+                                <div className="relative mb-6">
+                                    <div className="absolute inset-0 bg-amber-400 rounded-full blur-2xl opacity-20 group-hover:opacity-30 transition-opacity duration-700"></div>
+                                    <div className="bg-white dark:bg-gray-800 p-5 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden flex items-center justify-center min-w-[80px] min-h-[80px]">
+                                        <div className="absolute inset-0 bg-gradient-to-br from-amber-50 to-transparent dark:from-gray-700 dark:to-transparent opacity-50"></div>
+                                        <Bookmark className="w-10 h-10 text-amber-400 relative z-10 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-3" strokeWidth={1.5} />
+                                    </div>
+                                </div>
+                                <h3 className="text-[13px] font-extrabold text-gray-800 dark:text-gray-100 uppercase tracking-widest mb-1.5">No Saved Projects</h3>
+                                <p className="text-gray-400 dark:text-gray-500 text-[11px] leading-relaxed max-w-[240px] font-medium">
+                                    Star a project to track it here. Your saved projects will persist across sessions.
+                                </p>
+                            </div>
+                        )}
+                        {displayProjects.length === 0 && projectListFilter === 'all' && (
                             <div className="flex flex-col items-center justify-center py-24 px-6 text-center animate-fadeIn group">
                                 <div className="relative mb-6">
                                     <div className="absolute inset-0 bg-scbx dark:bg-emerald-500 rounded-full blur-2xl opacity-20 group-hover:opacity-30 transition-opacity duration-700"></div>
@@ -525,7 +680,8 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                             </div>
                         )}
                     </div>
-                )}
+                    );
+                })()}
 
                 {/* LOADING STATE (In-Body) */}
                 {activeTab !== 'projects' && isLoading && placesData[activeTab].length === 0 && (

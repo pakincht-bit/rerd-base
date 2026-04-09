@@ -13,6 +13,31 @@ export interface ChangelogEntry {
 
 export const changelogEntries: ChangelogEntry[] = [
   {
+    version: 'v1.7.0',
+    date: '2026-04-09',
+    title: 'Bookmarked Projects',
+    description: 'Never lose track of your favorite properties. Signed-in users can now save projects for easy access across sessions.',
+    changes: [
+      { type: 'new', text: 'Added a "Saved" tab in the project list to filter your bookmarked properties.' },
+      { type: 'new', text: 'Star buttons added to project cards, detail panels, and map markers.' },
+      { type: 'new', text: 'Bookmarks are synced securely to your user account via Supabase.' },
+      { type: 'improved', text: 'Bookmarked projects now bypass map and list filters, acting as a global persistent favorite list.' },
+      { type: 'improved', text: 'Nearby place layers (malls, hospitals, etc.) are now hidden by default for a cleaner map.' }
+    ]
+  },
+  {
+    version: 'v1.6.0',
+    date: '2026-04-03',
+    title: 'User Accounts & Authentication',
+    description: 'Sign in with Google or email to start building your Radia profile. Your account is ready for upcoming features like saved projects and usage tracking.',
+    changes: [
+      { type: 'new', text: 'Sign in with Google OAuth or email/password via Supabase Auth' },
+      { type: 'new', text: 'User avatar and profile popover in the sidebar with plan badge (Free/Pro)' },
+      { type: 'new', text: 'AuthContext provider for app-wide user state management' },
+      { type: 'improved', text: 'Supabase client refactored with proper config detection and graceful fallback' },
+    ],
+  },
+  {
     version: 'v1.5.0',
     date: '2026-03-31',
     title: 'Demo Dataset & Instant Onboarding',

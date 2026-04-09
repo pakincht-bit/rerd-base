@@ -1,19 +1,24 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const rawUrl = import.meta.env.VITE_SUPABASE_URL as string;
-const rawKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-let finalUrl = 'https://dummy.supabase.co';
-if (rawUrl && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))) {
-  finalUrl = rawUrl;
+// Check if Supabase is properly configured
+export const isSupabaseConfigured =
+  !!supabaseUrl &&
+  !!supabaseAnonKey &&
+  supabaseUrl.startsWith('https://') &&
+  supabaseUrl.includes('.supabase.co');
+
+if (!isSupabaseConfigured) {
+  console.warn(
+    'Supabase is not configured. Auth and cloud features are disabled.\n' +
+    'To enable them, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local'
+  );
 }
 
-if (!rawUrl || !rawKey || finalUrl === 'https://dummy.supabase.co') {
-    console.warn('Supabase URL or Anon Key is missing or invalid. Check your .env.local file (or environment variables in production).');
-}
-
-// Use a dummy valid URL and key to prevent the app from crashing on load if env vars are missing
-export const supabase = createClient(
-  finalUrl, 
-  rawKey || 'dummy-key'
+// Create client — uses dummy values if not configured so the app doesn't crash
+export const supabase: SupabaseClient = createClient(
+  isSupabaseConfigured ? supabaseUrl : 'https://placeholder.supabase.co',
+  isSupabaseConfigured ? supabaseAnonKey : 'placeholder-key'
 );
