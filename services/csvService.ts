@@ -115,6 +115,38 @@ function processRawData(rawData: any[]): Project[] {
           return processedProjects;
 }
 
+const stripHeaderPreamble = (text: string): string => {
+  const lines = text.split(/\r\n|\r|\n/);
+  const headerIndex = lines.findIndex(l => l.toLowerCase().includes('latitude') && l.toLowerCase().includes('longitude'));
+  if (headerIndex > 0) {
+    return lines.slice(headerIndex).join('\n');
+  }
+  return text;
+};
+
+// Thai CSV files exported from Excel are commonly saved as TIS-620 / Windows-874
+// rather than UTF-8. Decoding those bytes as UTF-8 produces garbled Thai text
+// (mojibake). We try UTF-8 first (fatal mode) and fall back to Windows-874.
+const decodeBytes = (buffer: ArrayBuffer): string => {
+  const bytes = new Uint8Array(buffer);
+
+  // Strip UTF-8 BOM if present and decode as UTF-8.
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return new TextDecoder('utf-8').decode(bytes.subarray(3));
+  }
+
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    try {
+      return new TextDecoder('windows-874').decode(bytes);
+    } catch {
+      // Last resort: lenient UTF-8 (replaces invalid bytes instead of throwing).
+      return new TextDecoder('utf-8').decode(bytes);
+    }
+  }
+};
+
 export const parseCSVFromText = (csvText: string): Project[] => {
   const results = Papa.parse(csvText, { header: true, skipEmptyLines: true });
   return processRawData(results.data as any[]);
@@ -122,25 +154,17 @@ export const parseCSVFromText = (csvText: string): Project[] => {
 
 export const parseCSV = (file: File): Promise<Project[]> => {
   return new Promise((resolve, reject) => {
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      beforeFirstChunk: (chunk) => {
-        const lines = chunk.split(/\r\n|\r|\n/);
-        const headerIndex = lines.findIndex(l => l.toLowerCase().includes('latitude') && l.toLowerCase().includes('longitude'));
-        if (headerIndex > 0) {
-          return lines.slice(headerIndex).join('\n');
-        }
-        return chunk;
-      },
-      complete: (results: any) => {
-        try {
-          resolve(processRawData(results.data));
-        } catch (err) {
-          reject(err);
-        }
-      },
-      error: (err: any) => reject(err)
-    });
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
+    reader.onload = () => {
+      try {
+        const text = stripHeaderPreamble(decodeBytes(reader.result as ArrayBuffer));
+        const results = Papa.parse(text, { header: true, skipEmptyLines: true });
+        resolve(processRawData(results.data as any[]));
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.readAsArrayBuffer(file);
   });
 };
