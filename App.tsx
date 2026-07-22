@@ -296,15 +296,17 @@ const App: React.FC = () => {
         setLoadingText('Parsing CSV...');
         try {
             const data = await parseCSV(file);
+            if (data.length === 0) {
+                alert('No valid projects found in this CSV. Check that it has ID or Code, Latitude/Lat, and Longitude/Lon columns.');
+                return;
+            }
             setProjects(data);
             setFileName(file.name);
-            if (data.length > 0) {
-                const initialLat = data[0].lat;
-                const initialLng = data[0].lng;
-                setSearchState(prev => ({ ...prev, lat: initialLat, lng: initialLng }));
-                setUnifiedSearchInput(`${initialLat.toFixed(5)}, ${initialLng.toFixed(5)}`);
-                setShowUploadModal(false);
-            }
+            const initialLat = data[0].lat;
+            const initialLng = data[0].lng;
+            setSearchState(prev => ({ ...prev, lat: initialLat, lng: initialLng }));
+            setUnifiedSearchInput(`${initialLat.toFixed(5)}, ${initialLng.toFixed(5)}`);
+            setShowUploadModal(false);
         } catch (err) {
             alert('Failed to parse CSV');
             console.error(err);

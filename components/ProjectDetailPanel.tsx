@@ -45,6 +45,24 @@ const getColor = (type: string, index: number) => {
     return FALLBACK_COLORS[index % FALLBACK_COLORS.length];
 };
 
+/** Parse H1.69 / H2.68 (12M) / H1.69 (6M) period keys. */
+const parsePeriodKey = (k: string) => {
+    const match = k.match(/^H([12])\.(\d+)/);
+    if (!match) return { half: 0, year: 0 };
+    return { half: parseInt(match[1], 10), year: parseInt(match[2], 10) };
+};
+
+const isPeriodKey = (k: string) => /^H[12]\.\d+/.test(k);
+
+const sortPeriodsAsc = (a: string, b: string) => {
+    const aVal = parsePeriodKey(a);
+    const bVal = parsePeriodKey(b);
+    if (aVal.year !== bVal.year) return aVal.year - bVal.year;
+    return aVal.half - bVal.half;
+};
+
+const sortPeriodsDesc = (a: string, b: string) => -sortPeriodsAsc(a, b);
+
 const AnimatedCounter = ({ value, decimals = 0, duration = 1200 }: { value: number, decimals?: number, duration?: number }) => {
     const [count, setCount] = useState(0);
 
@@ -165,23 +183,11 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                                         {/* Group 3: Sales */}
                                         <td className="px-2 py-3.5 text-right text-scbx font-bold">
                                             {(() => {
-                                                // Get most recent period key with (12m) - matching trend graph
+                                                // Most recent period (6M or 12M) — matches trend graph
                                                 if (u.history) {
                                                     const keys = Object.keys(u.history)
-                                                        .filter(k => /^H[12]\.\d+/.test(k) && k.toLowerCase().includes('(12m)'))
-                                                        .sort((a, b) => {
-                                                            // Parse H1.65 (12m) or H2.66 (12m) format
-                                                            const parseKey = (k: string) => {
-                                                                const match = k.match(/^H([12])\.(\d+)/);
-                                                                if (!match) return { half: 0, year: 0 };
-                                                                return { half: parseInt(match[1]), year: parseInt(match[2]) };
-                                                            };
-                                                            const aVal = parseKey(a);
-                                                            const bVal = parseKey(b);
-                                                            // Sort by year descending, then by half descending (H2 > H1)
-                                                            if (bVal.year !== aVal.year) return bVal.year - aVal.year;
-                                                            return bVal.half - aVal.half;
-                                                        });
+                                                        .filter(isPeriodKey)
+                                                        .sort(sortPeriodsDesc);
                                                     if (keys.length > 0) {
                                                         return u.history[keys[0]]?.toFixed(2) || '-';
                                                     }
@@ -260,56 +266,39 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
             }
         });
 
-        // Filter for 12M moving average keys (case insensitive) and sort chronologically
-        const movingAvgKeys = Array.from(allHistoryKeys)
-            .filter(k => k.toLowerCase().includes('(12m)'))
-            .sort((a, b) => {
-                // Parse H1.65 (12m) or H2.66 (12m) format
-                const parseKey = (k: string) => {
-                    const match = k.match(/^H([12])\.(\d+)/);
-                    if (!match) return { half: 0, year: 0 };
-                    return { half: parseInt(match[1]), year: parseInt(match[2]) };
-                };
-                const aVal = parseKey(a);
-                const bVal = parseKey(b);
-                // Sort by year ascending, then by half ascending (H1 before H2)
-                if (aVal.year !== bVal.year) return aVal.year - bVal.year;
-                return aVal.half - bVal.half;
-            });
+        // All half-year period keys (6M and 12M), sorted chronologically
+        const periodKeys = Array.from(allHistoryKeys)
+            .filter(isPeriodKey)
+            .sort(sortPeriodsAsc);
 
         // 2. Prepare Data Grouped by Type
-        const typeGroups: Record<string, { movingAvgData: number[], currentSpeed6m: number }> = {};
+        const typeGroups: Record<string, { periodData: number[] }> = {};
 
         project.subUnits.forEach(u => {
             if (!typeGroups[u.type]) {
                 typeGroups[u.type] = {
-                    movingAvgData: new Array(movingAvgKeys.length).fill(0),
-                    currentSpeed6m: 0
+                    periodData: new Array(periodKeys.length).fill(0),
                 };
             }
-            // Aggregate 6m speed
-            typeGroups[u.type].currentSpeed6m += parseFloat(u.saleSpeed6m) || 0;
 
-            // Aggregate moving avg history
-            movingAvgKeys.forEach((key, idx) => {
+            periodKeys.forEach((key, idx) => {
                 if (u.history && u.history[key] !== undefined) {
-                    typeGroups[u.type].movingAvgData[idx] += u.history[key];
+                    typeGroups[u.type].periodData[idx] += u.history[key];
                 }
             });
         });
 
         const seriesData2 = Object.keys(typeGroups).map((type, idx) => {
             const group = typeGroups[type];
-            // 12M History only
             return {
                 type,
                 color: getColor(type, idx),
-                data: group.movingAvgData
+                data: group.periodData
             };
         });
 
         // Chart Config
-        const labels2 = movingAvgKeys;
+        const labels2 = periodKeys;
 
         // Determine Max Y for scaling
         const allValues = seriesData2.flatMap(s => s.data);

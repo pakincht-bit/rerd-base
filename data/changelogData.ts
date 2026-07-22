@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 
 export const changelogEntries: ChangelogEntry[] = [
   {
+    version: 'v1.7.1',
+    date: '2026-07-22',
+    title: 'CSV Import Compatibility',
+    description: 'AREA-style Bangkok exports that use Code/Lat/Lon instead of ID/Latitude/Longitude now import correctly.',
+    changes: [
+      { type: 'fixed', text: 'CSV parser falls back to Code when ID is missing, so AREA Bkk exports upload successfully' },
+      { type: 'fixed', text: 'Area code mapping prefers AREA Code over generic Code so project IDs are not used as zone codes' },
+      { type: 'fixed', text: 'Sale speed trend chart now includes all half-year periods (e.g. H1.69 6M), not only (12M) columns' },
+      { type: 'improved', text: 'Clear alert when CSV upload yields zero valid projects instead of silently staying on the import modal' },
+    ],
+  },
+  {
     version: 'v1.7.0',
     date: '2026-04-09',
     title: 'Bookmarked Projects',

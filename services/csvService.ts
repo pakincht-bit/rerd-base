@@ -15,7 +15,8 @@ function processRawData(rawData: any[]): Project[] {
           };
 
           rawData.forEach((row: any) => {
-            const id = getValue(row, ['ID', 'id', 'project_id', 'Project ID']);
+            // Prefer explicit project ID; fall back to Code (common in AREA exports).
+            const id = getValue(row, ['ID', 'id', 'project_id', 'Project ID', 'Code']);
             if (!id) return;
             if (!groupedData[id]) groupedData[id] = [];
             groupedData[id].push(row);
@@ -100,7 +101,8 @@ function processRawData(rawData: any[]): Project[] {
               priceRange = minP === maxP ? `${minStr} MB` : `${minStr} - ${maxStr} MB`;
             }
 
-            const code = getValue(baseRow, ['Area Code', 'Code Area', 'Code', 'AREA Code', 'Zone', 'Location Code', 'Zone Code']);
+            // Prefer AREA/zone columns before generic "Code" (often the project ID in AREA exports).
+            const code = getValue(baseRow, ['Area Code', 'Code Area', 'AREA Code', 'Zone', 'Location Code', 'Zone Code', 'Code']);
             const name = getValue(baseRow, ['Project Name', 'Name', 'Project']);
             const developer = getValue(baseRow, ['Developer', 'Dev']) || '-';
 
