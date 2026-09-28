@@ -181,20 +181,7 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                                         <td className="px-4 py-3.5 text-right text-gray-800 dark:text-gray-200">{u.landArea}</td>
 
                                         {/* Group 3: Sales */}
-                                        <td className="px-2 py-3.5 text-right text-scbx font-bold">
-                                            {(() => {
-                                                // Most recent period (6M or 12M) — matches trend graph
-                                                if (u.history) {
-                                                    const keys = Object.keys(u.history)
-                                                        .filter(isPeriodKey)
-                                                        .sort(sortPeriodsDesc);
-                                                    if (keys.length > 0) {
-                                                        return u.history[keys[0]]?.toFixed(2) || '-';
-                                                    }
-                                                }
-                                                return '-';
-                                            })()}
-                                        </td>
+                                        <td className="px-2 py-3.5 text-right text-scbx font-bold">{u.saleSpeed6m}</td>
                                         <td className="px-2 py-3.5 text-right text-gray-800 dark:text-gray-200 font-bold">{u.saleSpeed}</td>
                                         <td className="px-4 py-3.5 text-right">
                                             <div className="flex flex-col items-end">

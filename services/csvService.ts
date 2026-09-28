@@ -48,7 +48,10 @@ function processRawData(rawData: any[]): Project[] {
               const total = parseFloat(getValue(r, ['Total units', 'Total Units', 'Units'])) || 0;
               const sold = parseFloat(getValue(r, ['Sold Units', 'Sold'])) || 0;
               const price = parseFloat(getValue(r, ['Avg. Price (Units)', 'Price', 'Avg Price', 'Avg. Price'])) || 0;
-              let speed6m = parseFloat(getValue(r, ['Sale Speed (6 เดือน)', 'Sale Speed 6m', 'Speed 6m', 'Sale Speed (6 Months)'])) || 0;
+              const rawSpeed6m = getValue(r, ['Sale Speed (6 เดือน)', 'Sale Speed 6m', 'Speed 6m', 'Sale Speed (6 Months)']);
+              const parsedSpeed6m = parseFloat(rawSpeed6m);
+              const hasSpeed6m = rawSpeed6m !== null && !isNaN(parsedSpeed6m);
+              let speed6m = hasSpeed6m ? parsedSpeed6m : 0;
               const speed = parseFloat(getValue(r, ['Sale Speed', 'Speed', 'Total Sale Speed'])) || 0;
               const launchDate = getValue(r, ['Launch date (YY.MM)', 'Launch Date', 'Launch']) || '-';
 
@@ -61,7 +64,7 @@ function processRawData(rawData: any[]): Project[] {
                 }
               });
 
-              if (speed6m === 0 && Object.keys(history).length > 0) {
+              if (!hasSpeed6m && Object.keys(history).length > 0) {
                 const hKeys = Object.keys(history).sort((a, b) => {
                   const parseKey = (k: string) => {
                     const m = k.match(/^H([12])\.(\d+)/);

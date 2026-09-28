@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 
 export const changelogEntries: ChangelogEntry[] = [
   {
+    version: 'v1.7.2',
+    date: '2026-09-28',
+    title: 'Accurate Latest Sale Speed in CSV Export',
+    changes: [
+      { type: 'fixed', text: 'CSV report "Sale Speed (Latest)" now comes directly from the uploaded Sale Speed (6 เดือน) column instead of the latest half-year history column' },
+      { type: 'fixed', text: 'A Sale Speed (6 เดือน) value of 0 is now kept as 0 instead of being replaced by a history value' },
+      { type: 'fixed', text: 'Project detail unit table "Sale Speed" column now shows the uploaded Sale Speed (6 เดือน) value' },
+    ],
+  },
+  {
     version: 'v1.7.1',
     date: '2026-07-22',
     title: 'CSV Import Compatibility',

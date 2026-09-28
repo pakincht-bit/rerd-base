@@ -218,30 +218,6 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
         };
     };
 
-    // Helper to get the latest period key from history (e.g., "H1.68" or "H2.67")
-    const getLatestPeriodKey = (history: Record<string, number>): string | null => {
-        const keys = Object.keys(history);
-        if (keys.length === 0) return null;
-
-        // Sort period keys in descending order (latest first)
-        // Format: H1.YY or H2.YY where YY is the year (Buddhist calendar, e.g., 67 = 2024)
-        keys.sort((a, b) => {
-            const parseKey = (key: string) => {
-                const match = key.match(/H([12])\.(\d+)/);
-                if (!match) return { year: 0, half: 0 };
-                return { year: parseInt(match[2], 10), half: parseInt(match[1], 10) };
-            };
-            const aVal = parseKey(a);
-            const bVal = parseKey(b);
-            // Sort by year descending, then by half descending (H2 > H1)
-            if (bVal.year !== aVal.year) return bVal.year - aVal.year;
-            return bVal.half - aVal.half;
-        });
-
-        return keys[0];
-    };
-
-
     const handleDownloadCSV = () => {
         // Updated Headers to match the granular subunit-based format
         const headers = [
@@ -328,12 +304,7 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
 
                 // Sale Speeds
                 group.totalSaleSpeed += parseFloat(u.saleSpeed) || 0;
-
-                const latestPeriodKey = getLatestPeriodKey(u.history);
-                const latestSpeed = latestPeriodKey && u.history[latestPeriodKey] !== undefined
-                    ? u.history[latestPeriodKey]
-                    : 0;
-                group.currentSaleSpeed += latestSpeed;
+                group.currentSaleSpeed += parseFloat(u.saleSpeed6m) || 0;
 
                 if (u.launchDate && u.launchDate !== '-') {
                     group.launchDates.push(u.launchDate);
