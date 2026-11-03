@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 
 export const changelogEntries: ChangelogEntry[] = [
   {
+    version: 'v1.7.3',
+    date: '2026-11-03',
+    title: 'Price per sq.m. (ราคาต่อตารางเมตร)',
+    changes: [
+      { type: 'new', text: 'Project detail Unit Mix table now shows Price/sqm (ราคาต่อตารางเมตร) for each unit type' },
+      { type: 'new', text: 'Price / sqm range slider in the bottom toolbar: drag min/max ฿/sqm handles to show projects with at least one unit type in range' },
+      { type: 'improved', text: 'Price Range filter is now a matching min/max slider (MB) based on the loaded data' },
+      { type: 'fixed', text: 'Price Range and price segment filters now work when uploaded prices are in baht instead of MB' },
+      { type: 'fixed', text: 'Export report and CSV price/sq.m. and price/sq.w. no longer inflate values 1,000,000x when prices are uploaded in baht' },
+    ],
+  },
+  {
     version: 'v1.7.2',
     date: '2026-09-28',
     title: 'Accurate Latest Sale Speed in CSV Export',

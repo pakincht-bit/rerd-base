@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Project } from '../types';
+import { getPricePerArea } from '../services/csvService';
 import { X, TrendingUp, Home, DollarSign, Activity } from 'lucide-react';
 
 interface ExportDashboardProps {
@@ -199,12 +200,12 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
         const avgLandVal = weightedLandUnitsSum > 0 ? weightedLandSum / weightedLandUnitsSum : 0;
         const avgLandDisplay = avgLandVal > 0 ? avgLandVal.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '-';
 
-        // New Calculations: Price/sq.m. = (Avg Price / Usable Area) * 1,000,000
-        const calculatedPriceSqm = (avgPriceVal > 0 && avgAreaVal > 0) ? (avgPriceVal / avgAreaVal) * 1000000 : 0;
+        // New Calculations: Price/sq.m. = Avg Price (baht) / Usable Area
+        const calculatedPriceSqm = getPricePerArea(avgPriceVal, avgAreaVal);
         const priceSqmDisplay = calculatedPriceSqm > 0 ? Math.round(calculatedPriceSqm).toLocaleString() : '-';
 
-        // New Calculations: Price/sq.w. = (Avg Price / Land Area) * 1,000,000
-        const calculatedPriceSqw = (avgPriceVal > 0 && avgLandVal > 0) ? (avgPriceVal / avgLandVal) * 1000000 : 0;
+        // New Calculations: Price/sq.w. = Avg Price (baht) / Land Area
+        const calculatedPriceSqw = getPricePerArea(avgPriceVal, avgLandVal);
         const priceSqwDisplay = calculatedPriceSqw > 0 ? Math.round(calculatedPriceSqw).toLocaleString() : '-';
 
         return {
@@ -322,12 +323,12 @@ const ExportDashboard: React.FC<ExportDashboardProps> = ({ projects, onClose, on
                 const launchDate = stats.launchDates.length > 0 ? stats.launchDates.sort()[0] : '-';
                 const avgPriceDisplay = avgPrice > 0 ? (avgPrice < 1000000 ? avgPrice.toLocaleString() : `${(avgPrice / 1000000).toFixed(2)} MB`) : '-';
 
-                // New Calculations: Price/sq.m. = (Avg Price / Usable Area) * 1,000,000
-                const calculatedPriceSqm = (avgPrice > 0 && avgArea > 0) ? (avgPrice / avgArea) * 1000000 : 0;
+                // New Calculations: Price/sq.m. = Avg Price (baht) / Usable Area
+                const calculatedPriceSqm = getPricePerArea(avgPrice, avgArea);
                 const priceSqmDisplay = calculatedPriceSqm > 0 ? Math.round(calculatedPriceSqm).toLocaleString() : '-';
 
-                // New Calculations: Price/sq.w. = (Avg Price / Land Area) * 1,000,000
-                const calculatedPriceSqw = (avgPrice > 0 && avgLand > 0) ? (avgPrice / avgLand) * 1000000 : 0;
+                // New Calculations: Price/sq.w. = Avg Price (baht) / Land Area
+                const calculatedPriceSqw = getPricePerArea(avgPrice, avgLand);
                 const priceSqwDisplay = calculatedPriceSqw > 0 ? Math.round(calculatedPriceSqw).toLocaleString() : '-';
 
                 const percentSold = stats.totalUnits > 0 ? (stats.soldUnits / stats.totalUnits) * 100 : 0;

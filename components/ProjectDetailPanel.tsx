@@ -1,6 +1,7 @@
 // ... (imports remain the same)
 import React, { useState, useEffect } from 'react';
 import { Project } from '../types';
+import { getPricePerArea } from '../services/csvService';
 import { X, Copy, Check, Star } from 'lucide-react';
 
 interface ProjectDetailPanelProps {
@@ -159,6 +160,7 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                                     <th className="px-4 py-3 text-left">Type</th>
                                     <th className="px-2 py-3 text-center">Launch</th>
                                     <th className="px-4 py-3 text-right">Price (MB)</th>
+                                    <th className="px-2 py-3 text-right">Price/sqm</th>
 
                                     <th className="px-2 py-3 text-right">Area</th>
                                     <th className="px-4 py-3 text-right">Land</th>
@@ -175,6 +177,10 @@ const ProjectDetailPanel: React.FC<ProjectDetailPanelProps> = ({ project, onClos
                                         <td className="px-4 py-3.5 font-medium text-gray-800 dark:text-gray-200 max-w-[100px] truncate" title={u.type}>{u.type}</td>
                                         <td className="px-2 py-3.5 text-center text-gray-800 dark:text-gray-200">{u.launchDate}</td>
                                         <td className="px-4 py-3.5 text-right text-gray-800 dark:text-gray-200 font-medium">{u.priceStr.replace(/ ?MB$/, '')}</td>
+                                        <td className="px-2 py-3.5 text-right text-gray-800 dark:text-gray-200">{(() => {
+                                            const perSqm = getPricePerArea(u.price, parseFloat(u.usableArea));
+                                            return perSqm > 0 ? Math.round(perSqm).toLocaleString() : '-';
+                                        })()}</td>
 
                                         {/* Group 2: Size */}
                                         <td className="px-2 py-3.5 text-right text-gray-800 dark:text-gray-200">{u.usableArea}</td>

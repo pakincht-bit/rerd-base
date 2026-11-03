@@ -51,6 +51,8 @@ export interface SearchState {
   sortBy: 'distance' | 'percentSold' | 'speed6m' | 'speed' | 'priceAsc' | 'priceDesc' | 'unitLeft' | 'launchDate';
   minPrice: number | null;
   maxPrice: number | null;
+  minPricePerSqm: number | null; // Baht per sq.m.
+  maxPricePerSqm: number | null;
   minLaunchDate: string | null; // Format "YY.MM" (e.g. "60.01")
   maxSoldPercent: number; // New filter for sold % threshold
   priceSegment: string | null; // Price segment filter (e.g., "< 0.5", "0.5-1.0", etc.)

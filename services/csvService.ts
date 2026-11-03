@@ -173,3 +173,9 @@ export const parseCSV = (file: File): Promise<Project[]> => {
     reader.readAsArrayBuffer(file);
   });
 };
+// Prices may be stored in baht (e.g. 3250000) or in millions (e.g. 3.25); normalize to baht.
+export const toBaht = (price: number): number => (price > 0 && price < 1000 ? price * 1000000 : price);
+
+// Price per area unit in baht (e.g. baht/sq.m.). Returns 0 when either input is missing.
+export const getPricePerArea = (price: number, area: number): number =>
+  price > 0 && area > 0 ? toBaht(price) / area : 0;

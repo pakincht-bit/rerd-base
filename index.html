@@ -315,6 +315,19 @@
       border: 2px solid white;
       box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
     }
+
+    /* Dual-handle range: two stacked inputs, only the thumbs take pointer events */
+    .dual-range {
+      pointer-events: none;
+    }
+
+    .dual-range::-webkit-slider-thumb {
+      pointer-events: auto;
+    }
+
+    .dual-range::-moz-range-thumb {
+      pointer-events: auto;
+    }
   </style>
   <script type="importmap">
 {

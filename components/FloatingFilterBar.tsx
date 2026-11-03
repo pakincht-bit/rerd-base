@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { SearchState, Project } from '../types';
-import { MapPin, Hash, Search, ChevronDown, Home, Calendar, Percent, DollarSign, RotateCcw, Check, LocateFixed, Building2 } from 'lucide-react';
+import { getPricePerArea, toBaht } from '../services/csvService';
+import RangeSlider from './RangeSlider';
+import { MapPin, Hash, Search, ChevronDown, Home, Calendar, Percent, DollarSign, RotateCcw, Check, LocateFixed, Building2, Grid3x3 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface FloatingFilterBarProps {
@@ -16,7 +18,7 @@ interface FloatingFilterBarProps {
     onToggleRuler: () => void;
 }
 
-type PopoverId = 'type' | 'launch' | 'sold' | 'price' | 'code' | 'developer' | null;
+type PopoverId = 'type' | 'launch' | 'sold' | 'price' | 'pricePerSqm' | 'code' | 'developer' | null;
 
 const FloatingFilterBar: React.FC<FloatingFilterBarProps> = ({
     searchState,
@@ -53,6 +55,26 @@ const FloatingFilterBar: React.FC<FloatingFilterBarProps> = ({
     // ─── Computed Data ───
     const uniqueCodes = useMemo(() => {
         return Array.from(new Set(allProjects.map(p => p.code).filter(Boolean))).sort();
+    }, [allProjects]);
+
+    // Slider bounds for price in MB, rounded out to the nearest 0.5 MB
+    const priceBounds = useMemo(() => {
+        const values = allProjects.flatMap(p => p.subUnits.map(u => toBaht(u.price) / 1000000)).filter(v => v > 0);
+        if (values.length === 0) return { lo: 0, hi: 0 };
+        return {
+            lo: Math.floor(Math.min(...values) * 2) / 2,
+            hi: Math.ceil(Math.max(...values) * 2) / 2,
+        };
+    }, [allProjects]);
+
+    // Slider bounds for price/sqm, rounded out to the nearest 10k baht
+    const pricePerSqmBounds = useMemo(() => {
+        const values = allProjects.flatMap(p => p.subUnits.map(u => getPricePerArea(u.price, parseFloat(u.usableArea)))).filter(v => v > 0);
+        if (values.length === 0) return { lo: 0, hi: 0 };
+        return {
+            lo: Math.floor(Math.min(...values) / 10000) * 10000,
+            hi: Math.ceil(Math.max(...values) / 10000) * 10000,
+        };
     }, [allProjects]);
 
     const filteredUniqueCodes = useMemo(() => {
@@ -162,15 +184,17 @@ const FloatingFilterBar: React.FC<FloatingFilterBarProps> = ({
     const hasLaunchFilter = searchState.minLaunchDate !== null;
     const hasSoldFilter = searchState.maxSoldPercent < 100;
     const hasPriceFilter = searchState.minPrice !== null || searchState.maxPrice !== null;
+    const hasPricePerSqmFilter = searchState.minPricePerSqm !== null || searchState.maxPricePerSqm !== null;
     const hasCodeFilter = searchState.codeFilter.length > 0;
     const hasDeveloperFilter = searchState.developerFilter.length > 0;
-    const hasAnyFilter = hasTypeFilter || hasLaunchFilter || hasSoldFilter || hasPriceFilter || hasCodeFilter || hasDeveloperFilter;
+    const hasAnyFilter = hasTypeFilter || hasLaunchFilter || hasSoldFilter || hasPriceFilter || hasPricePerSqmFilter || hasCodeFilter || hasDeveloperFilter;
 
     const allFilterButtons = [
         { id: 'type' as const, icon: Home, label: 'Property Type', active: hasTypeFilter, count: searchState.typeFilter.length },
         { id: 'launch' as const, icon: Calendar, label: 'Launch Date', active: hasLaunchFilter },
         { id: 'sold' as const, icon: Percent, label: 'Sold %', active: hasSoldFilter },
         { id: 'price' as const, icon: DollarSign, label: 'Price Range', active: hasPriceFilter },
+        { id: 'pricePerSqm' as const, icon: Grid3x3, label: 'Price / sqm', active: hasPricePerSqmFilter },
         { id: 'code' as const, icon: Hash, label: 'Area Code', active: hasCodeFilter, count: searchState.codeFilter.length },
         { id: 'developer' as const, icon: Building2, label: 'Developer', active: hasDeveloperFilter, count: searchState.developerFilter.length },
     ];
@@ -281,7 +305,8 @@ const FloatingFilterBar: React.FC<FloatingFilterBarProps> = ({
                         </div>
                     </div>
                 );
-            case 'price':
+            case 'price': {
+                const { lo, hi } = priceBounds;
                 return (
                     <div className="p-4 w-[280px]">
                         <div className="flex justify-between items-center mb-3">
@@ -290,29 +315,51 @@ const FloatingFilterBar: React.FC<FloatingFilterBarProps> = ({
                                 <button onClick={() => setSearchState(prev => ({ ...prev, minPrice: null, maxPrice: null }))} className="text-[10px] text-gray-500 underline hover:text-black">Clear</button>
                             )}
                         </div>
-                        <div className="flex gap-2 items-center">
-                            <div className="flex-1">
-                                <input
-                                    type="number"
-                                    placeholder="Min"
-                                    value={searchState.minPrice ?? ''}
-                                    onChange={(e) => setSearchState(prev => ({ ...prev, minPrice: e.target.value ? parseFloat(e.target.value) : null }))}
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-scbx focus:border-scbx transition-all"
-                                />
-                            </div>
-                            <span className="text-gray-400 text-xs font-bold">-</span>
-                            <div className="flex-1">
-                                <input
-                                    type="number"
-                                    placeholder="Max"
-                                    value={searchState.maxPrice ?? ''}
-                                    onChange={(e) => setSearchState(prev => ({ ...prev, maxPrice: e.target.value ? parseFloat(e.target.value) : null }))}
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-scbx focus:border-scbx transition-all"
-                                />
-                            </div>
-                        </div>
+                        {hi > lo ? (
+                            <RangeSlider
+                                lo={lo}
+                                hi={hi}
+                                step={0.1}
+                                valueMin={searchState.minPrice}
+                                valueMax={searchState.maxPrice}
+                                onChange={(min, max) => setSearchState(prev => ({ ...prev, minPrice: min, maxPrice: max }))}
+                                format={(v) => `${v.toFixed(1)} MB`}
+                                ariaLabel="price"
+                            />
+                        ) : (
+                            <p className="text-xs text-gray-400">No price data available</p>
+                        )}
                     </div>
                 );
+            }
+            case 'pricePerSqm': {
+                const { lo, hi } = pricePerSqmBounds;
+                return (
+                    <div className="p-4 w-[280px]">
+                        <div className="flex justify-between items-center mb-3">
+                            <h3 className="text-xs font-medium text-gray-400">ราคาต่อตารางเมตร (฿/sqm)</h3>
+                            {hasPricePerSqmFilter && (
+                                <button onClick={() => setSearchState(prev => ({ ...prev, minPricePerSqm: null, maxPricePerSqm: null }))} className="text-[10px] text-gray-500 underline hover:text-black">Clear</button>
+                            )}
+                        </div>
+                        {hi > lo ? (
+                            <RangeSlider
+                                lo={lo}
+                                hi={hi}
+                                step={1000}
+                                valueMin={searchState.minPricePerSqm}
+                                valueMax={searchState.maxPricePerSqm}
+                                onChange={(min, max) => setSearchState(prev => ({ ...prev, minPricePerSqm: min, maxPricePerSqm: max }))}
+                                format={(v) => `฿${Math.round(v / 1000).toLocaleString()}k`}
+                                ariaLabel="price per sqm"
+                            />
+                        ) : (
+                            <p className="text-xs text-gray-400">No price/sqm data available</p>
+                        )}
+                        <p className="mt-2 text-[10px] text-gray-400">Shows projects with at least one unit type in this range</p>
+                    </div>
+                );
+            }
             case 'code': {
                 const codes = searchState.searchMode === 'location' ? visibleCodes : filteredUniqueCodes;
                 // Group codes by first letter

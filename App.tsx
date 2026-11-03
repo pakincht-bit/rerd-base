@@ -11,7 +11,7 @@ import FloatingFilterBar from './components/FloatingFilterBar';
 import WelcomeModal from './components/WelcomeModal';
 import AuthModal from './components/AuthModal';
 import { useAuth } from './services/AuthContext';
-import { parseCSV, parseCSVFromText } from './services/csvService';
+import { parseCSV, parseCSVFromText, getPricePerArea, toBaht } from './services/csvService';
 import { fetchBookmarks, addBookmark, removeBookmark } from './services/bookmarkService';
 import html2canvas from 'html2canvas';
 
@@ -51,6 +51,8 @@ const App: React.FC = () => {
         sortBy: 'distance',
         minPrice: null,
         maxPrice: null,
+        minPricePerSqm: null,
+        maxPricePerSqm: null,
         minLaunchDate: null,
         maxSoldPercent: 100,
         priceSegment: null,
@@ -212,7 +214,7 @@ const App: React.FC = () => {
 
         if (searchState.minPrice !== null || searchState.maxPrice !== null) {
             data = data.filter(p => {
-                const validPrices = p.subUnits.map(u => u.price).filter(price => price > 0);
+                const validPrices = p.subUnits.map(u => toBaht(u.price) / 1000000).filter(price => price > 0); // MB
                 if (validPrices.length === 0) return false;
                 const projectMin = Math.min(...validPrices);
                 const projectMax = Math.max(...validPrices);
@@ -220,6 +222,16 @@ const App: React.FC = () => {
                 const meetsMax = searchState.maxPrice !== null ? projectMin <= searchState.maxPrice : true;
                 return meetsMin && meetsMax;
             });
+        }
+
+        if (searchState.minPricePerSqm !== null || searchState.maxPricePerSqm !== null) {
+            data = data.filter(p => p.subUnits.some(u => {
+                const perSqm = getPricePerArea(u.price, parseFloat(u.usableArea));
+                if (perSqm <= 0) return false;
+                const meetsMin = searchState.minPricePerSqm !== null ? perSqm >= searchState.minPricePerSqm : true;
+                const meetsMax = searchState.maxPricePerSqm !== null ? perSqm <= searchState.maxPricePerSqm : true;
+                return meetsMin && meetsMax;
+            }));
         }
 
         if (searchState.minLaunchDate) {
@@ -255,7 +267,7 @@ const App: React.FC = () => {
             };
             const range = getSegmentRange(searchState.priceSegment);
             data = data.filter(p => {
-                const validPrices = p.subUnits.map(u => u.price).filter(price => price > 0);
+                const validPrices = p.subUnits.map(u => toBaht(u.price) / 1000000).filter(price => price > 0); // MB
                 if (validPrices.length === 0) return false;
                 const projectMin = Math.min(...validPrices);
                 const projectMax = Math.max(...validPrices);
@@ -264,7 +276,7 @@ const App: React.FC = () => {
         }
 
         return data;
-    }, [projects, searchState.lat, searchState.lng, searchState.radius, searchState.typeFilter, searchState.developerFilter, searchState.minPrice, searchState.maxPrice, searchState.minLaunchDate, searchState.maxSoldPercent, searchState.priceSegment, searchState.searchMode]);
+    }, [projects, searchState.lat, searchState.lng, searchState.radius, searchState.typeFilter, searchState.developerFilter, searchState.minPrice, searchState.maxPrice, searchState.minPricePerSqm, searchState.maxPricePerSqm, searchState.minLaunchDate, searchState.maxSoldPercent, searchState.priceSegment, searchState.searchMode]);
 
     const filteredProjects = useMemo(() => {
         let data = [...projectsInView];
@@ -369,6 +381,8 @@ const App: React.FC = () => {
             developerFilter: [],
             minPrice: null,
             maxPrice: null,
+            minPricePerSqm: null,
+            maxPricePerSqm: null,
             minLaunchDate: null,
             maxSoldPercent: 100
         }));
